@@ -1,17 +1,20 @@
 PROCESSING_SUBSYSTEM_DEF(iconupdates)
 	name = "icon_updates"
-	wait = 1
+	wait = 2
 	flags = SS_NO_INIT
 	priority = FIRE_PRIORITY_MOBS
 	processing_flag = PROCESSING_ICON_UPDATES
 
 	var/list/image_removal_schedule = list()
 	var/list/cleanup_run = list()
+	var/next_expiry = INFINITY
 
 /datum/controller/subsystem/processing/iconupdates/fire(resumed = 0)
 	if(!resumed)
-		src.cleanup_run = image_removal_schedule.Copy()
 		src.currentrun = processing.Copy()
+		if(world.time >= next_expiry)
+			src.cleanup_run = image_removal_schedule.Copy()
+			next_expiry = INFINITY
 
 	var/list/cleanup_run = src.cleanup_run
 	while(length(cleanup_run))
@@ -54,11 +57,6 @@ PROCESSING_SUBSYSTEM_DEF(iconupdates)
 		return
 
 	if(!I || QDELETED(I))
-		var/list/client_schedule = image_removal_schedule[I]
-		if(client_schedule)
-			for(var/client/C as anything in client_schedule)
-				if(C && !QDELETED(C))
-					C.images -= I
 		image_removal_schedule -= I
 		return
 
@@ -79,6 +77,8 @@ PROCESSING_SUBSYSTEM_DEF(iconupdates)
 		if(current_time >= expire_time)
 			C.images -= I
 			clients_to_remove += C
+		else if(expire_time < next_expiry)
+			next_expiry = expire_time
 
 	for(var/client/C as anything in clients_to_remove)
 		client_schedule -= C

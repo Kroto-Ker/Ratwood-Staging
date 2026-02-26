@@ -369,6 +369,7 @@
 		return
 
 	var/expire_time = world.time + duration
+	SSiconupdates.next_expiry = min(SSiconupdates.next_expiry, expire_time)
 
 	var/list/client_schedule = SSiconupdates.image_removal_schedule[I]
 	if(!client_schedule)
