@@ -60,21 +60,6 @@
 	var/mob/living/carbon/human/dummy/mannequin = generate_or_wait_for_human_dummy(DUMMY_HUMAN_SLOT_PREFERENCES)
 	copy_to(mannequin, 1, TRUE, TRUE)
 
-	if(jobOnly)
-		mannequin.job = previewJob.title
-		previewJob.equip(mannequin, TRUE, preference_source = parent)
-
-	if(preview_subclass && !jobOnly)
-		testing("previewjob")
-		mannequin.job = previewJob.title
-		mannequin.patron = selected_patron
-		preview_subclass.equipme(mannequin, dummy = TRUE)
-
-	mannequin.regenerate_clothes()
-	mannequin.update_body()
-	mannequin.update_hair()
-	mannequin.rebuild_obscured_flags()
-	COMPILE_OVERLAYS(mannequin)
 	parent.show_character_previews(new /mutable_appearance(mannequin))
 	unset_busy_human_dummy(DUMMY_HUMAN_SLOT_PREFERENCES)
 

@@ -202,29 +202,51 @@
 
 
 //! ## Overlays subsystem
+// A reasonable number of maximum overlays an object needs
+// If you think you need more, rethink it
+// On TGStation this is 100. Roguecode / Vanderlin uses 200 - so let's stick to this.
+#define MAX_ATOM_OVERLAYS 200
 
 ///Compile all the overlays for an atom from the cache lists
-#define COMPILE_OVERLAYS(A)\
-	do {\
-		var/list/ad = A.add_overlays;\
-		var/list/rm = A.remove_overlays;\
-		var/list/po = A.priority_overlays;\
-		if(LAZYLEN(rm)){\
-			A.overlays -= rm;\
-			rm.Cut();\
-		}\
-		if(LAZYLEN(ad)){\
-			A.overlays |= ad;\
-			ad.Cut();\
-		}\
-		if(LAZYLEN(po)){\
-			A.overlays |= po;\
-		}\
-		for(var/I in A.alternate_appearances){\
-			var/datum/atom_hud/alternate_appearance/AA = A.alternate_appearances[I];\
+#define POST_OVERLAY_CHANGE(changed_on) \
+	if(length(changed_on.overlays) >= MAX_ATOM_OVERLAYS) { \
+		var/text_lays = overlays2text(changed_on.overlays); \
+		stack_trace("Too many overlays on [changed_on.type] - [length(changed_on.overlays)].\
+			\n What follows is a printout of all existing overlays at the time of the overflow \n[text_lays]"); \
+	} \
+	if(alternate_appearances) { \
+		for(var/I in changed_on.alternate_appearances){\
+			var/datum/atom_hud/alternate_appearance/AA = changed_on.alternate_appearances[I];\
 			if(AA.transfer_overlays){\
-				AA.copy_overlays(A, TRUE);\
+				AA.copy_overlays(changed_on, TRUE);\
 			}\
-		}\
-		A.flags_1 &= ~OVERLAY_QUEUED_1;\
-	} while (FALSE)
+		} \
+	}
+/**
+	Create a new timer and add it to the queue.
+	* Arguments:
+	* * callback the callback to call on timer finish
+	* * wait deciseconds to run the timer for
+	* * flags flags for this timer, see: code\__DEFINES\subsystems.dm
+	* * timer_subsystem the subsystem to insert this timer into
+*/
+#define addtimer(args...) _addtimer(args, file = __FILE__, line = __LINE__)
+
+// Wardrobe subsystem tasks
+#define SSWARDROBE_STOCK 1
+#define SSWARDROBE_INSPECT 2
+
+// Wardrobe cache metadata indexes
+#define WARDROBE_CACHE_COUNT 1
+#define WARDROBE_CACHE_LAST_INSPECT 2
+#define WARDROBE_CACHE_CALL_INSERT 3
+#define WARDROBE_CACHE_CALL_REMOVAL 4
+
+// Wardrobe preloaded stock indexes
+#define WARDROBE_STOCK_CONTENTS 1
+#define WARDROBE_STOCK_CALL_INSERT 2
+#define WARDROBE_STOCK_CALL_REMOVAL 3
+
+// Wardrobe callback master list indexes
+#define WARDROBE_CALLBACK_INSERT 1
+#define WARDROBE_CALLBACK_REMOVE 2
