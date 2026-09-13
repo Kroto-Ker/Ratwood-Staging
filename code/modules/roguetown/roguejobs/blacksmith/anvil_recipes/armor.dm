@@ -852,6 +852,7 @@
 	name = "Visored Sallet, Snouted, Steel (+1 Steel)"
 	additional_items = list(/obj/item/ingot/steel)
 	created_item = /obj/item/clothing/head/roguetown/helmet/sallet/visored/snouted
+	display_category = ITEM_CAT_ARMOR_HELMETS
 
 /datum/anvil_recipe/armor/steel/helmetbuc
 	name = "Bucket Helmet, Steel (+1 Steel)"
@@ -875,11 +876,13 @@
 	name = "Roundface Bascinet, Steel (+1 Steel)"
 	additional_items = list(/obj/item/ingot/steel)
 	created_item = /obj/item/clothing/head/roguetown/helmet/bascinet/pigface/roundface
+	display_category = ITEM_CAT_ARMOR_HELMETS
 
 /datum/anvil_recipe/armor/steel/helmetroundface_snouted
 	name = "Roundface Bascinet, Snouted, Steel (+1 Steel)"
 	additional_items = list(/obj/item/ingot/steel)
 	created_item = /obj/item/clothing/head/roguetown/helmet/bascinet/pigface/roundface/snouted
+	display_category = ITEM_CAT_ARMOR_HELMETS
 
 /datum/anvil_recipe/armor/steel/bascinet
 	name = "Bascinet Helmet, Steel"
@@ -908,6 +911,7 @@
 	name = "Armet, Snouted, Steel (+1 Steel)"
 	additional_items = list(/obj/item/ingot/steel)
 	created_item = /obj/item/clothing/head/roguetown/helmet/heavy/knight/armet/snouted
+	display_category = ITEM_CAT_ARMOR_HELMETS
 
 /datum/anvil_recipe/armor/steel/slittedkettle
 	name = "Slitted Kettle, Steel (+1 Steel)"
@@ -1096,6 +1100,7 @@
 	name = "Noccian Helmet, Snouted (+1 Cured Leather)"
 	additional_items = list(/obj/item/natural/hide/cured)
 	created_item = /obj/item/clothing/head/roguetown/helmet/heavy/nochelm/snouted
+	display_category = ITEM_CAT_ARMOR_HELMETS
 
 /datum/anvil_recipe/armor/holysteel/dendorhelm
 	name = "Dendorite Helmet (+1 Cured Leather)"
