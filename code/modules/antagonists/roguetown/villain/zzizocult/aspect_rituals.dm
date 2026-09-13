@@ -23,7 +23,7 @@ GLOBAL_LIST_INIT(zizo_researchable, list(
 	/datum/ritual/bite/thanatophobia,
 	/datum/ritual/rot/transfuse, /datum/ritual/rot/blight,
 	/datum/ritual/rot/plague, /datum/ritual/noise/thermalvis,
- 	/datum/ritual/noise/forgettongue, /datum/ritual/noise/witchery,
+	/datum/ritual/noise/forgettongue, /datum/ritual/noise/witchery,
 	/datum/ritual/pitch/fireresist, /datum/ritual/pitch/shadowform,
 	/datum/ritual/pitch/lightcurse, /datum/ritual/blood/transfuse,
 	/datum/ritual/blood/bloodsnare, /datum/ritual/blood/bloodbond,
