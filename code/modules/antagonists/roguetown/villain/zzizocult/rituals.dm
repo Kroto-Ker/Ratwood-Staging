@@ -150,7 +150,7 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	qdel(R)
 	open(user)
 
-/proc/reroll_targets(mob/living/carbon/human/user)
+/proc/get_zizo_weighted_targets()
 	var/list/weighted = list()
 	for(var/mob/living/carbon/human/H in GLOB.human_list)
 		if(!H.mind || H.stat == DEAD || is_zizo(H))
@@ -158,14 +158,20 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 		var/datum/job/J = SSjob.GetJob(H.mind.assigned_role)
 		if(!J || (J.type in list(KING_QUEEN_ROLES)) || J.type == /datum/job/roguetown/bandit || J.type == /datum/job/roguetown/wretch)
 			continue
+		if(J.type in list(TIER_THREE_GATEROLES))
+			continue
 		if(J.type in (list(YEOMEN_ROLES) + list(MANOR_ROLES) + list(WANDERER_ROLES) + list(GARRISON_ROLES) + list(CHURCH_ROLES)))
 			weighted[H] = 5
 			if(H.purity == TRUE)
 				weighted[H] = 10
-		else
+		else if(J.type in list(PEASANT_ROLES))
 			weighted[H] = 1
 			if(H.purity == TRUE)
 				weighted[H] = 5
+	return weighted
+
+/proc/reroll_targets(mob/living/carbon/human/user)
+	var/list/weighted = get_zizo_weighted_targets()
 	if(is_zizo(user))
 		GLOB.zizo_targets = list()
 		for(var/i in 1 to 7)
@@ -181,6 +187,32 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 			var/mob/living/carbon/human/chosen = pickweight(weighted)
 			user.zizo_targets += chosen
 			weighted -= chosen
+
+/proc/reroll_gate_targets(gate_count)
+	if(gate_count <= 0)
+		return
+	var/list/weighted = list()
+	for(var/mob/living/carbon/human/H in GLOB.human_list)
+		if(!H.mind || H.stat == DEAD || is_zizo(H))
+			continue
+		var/datum/job/J = SSjob.GetJob(H.mind.assigned_role)
+		if(!J || (J.type in list(KING_QUEEN_ROLES)) || J.type == /datum/job/roguetown/bandit || J.type == /datum/job/roguetown/wretch)
+			continue
+		if(gate_count == 1 && !(J.type in (list(TIER_TWO_GATEROLES))))
+			continue
+		if(gate_count > 1 && !(J.type in (list(TIER_THREE_GATEROLES))))
+			continue
+		weighted[H] = 1
+		if(H.purity == TRUE)
+			weighted[H] = 5
+
+	GLOB.gate_targets = list()
+	for(var/i in 1 to 5)
+		if(!weighted.len)
+			break
+		var/mob/living/carbon/human/chosen = pickweight(weighted)
+		GLOB.gate_targets += chosen
+		weighted -= chosen
 
 /datum/ritual
 	abstract_type = /datum/ritual
@@ -277,14 +309,14 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 		to_chat(target, span_notice("I see the truth now! It all makes so much sense! They aren't HERETICS! They want the BEST FOR US!"))
 		PR.add_cultist(target.mind)
 		target.praise()
-		target.purity = FALSE
-		for(var/datum/mind/M in SSmapping.retainer.cultists)
-			if(M.current)
-				zizo_award(M.current, 2)
 		if(target.purity == TRUE)
 			new /obj/item/necro_relics/necro_crystal(center)
 			zizo_award(user, 3)
 			zizo_award(target, 3)
+		target.purity = FALSE
+		for(var/datum/mind/M in SSmapping.retainer.cultists)
+			if(M.current)
+				zizo_award(M.current, 2)
 		var/datum/job/J = SSjob.GetJob(target.mind?.assigned_role)
 		if(J && (J.type in (list(NOBLE_ROLES) + list(CHURCH_ROLES) + list(GARRISON_ROLES) + list(INQUISITION_ROLES))))
 			new /obj/item/necro_relics/necro_crystal(center)
@@ -412,6 +444,10 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	else
 		cultist.zizo_target_cd = world.time + 20 MINUTES
 	reroll_targets(user = cultist)
+	if(is_zizo(user))
+		var/datum/ritual/servantry/aspect/gate_ritual = LAZYACCESS(GLOB.ritualslist, "Open Gate")
+		if(gate_ritual)
+			reroll_gate_targets(gate_ritual.gate_count)
 	to_chat(user, span_notice("You feel a shiver down your spine. Seek your new sacrifices with heartaches."))
 
 /datum/ritual/servantry/guidance
@@ -473,20 +509,27 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	if(istype(prey.wear_neck, /obj/item/clothing/neck/roguetown/psicross/silver))
 		to_chat(user, span_danger("They are wearing silver, it resists the dark magick!"))
 		return
-	var/dir_text = dir2text(get_dir(user, prey))
-	var/dist = get_dist(user, prey)
-	var/proximity_text = "far away"
-	if(dist <= 5)
-		proximity_text = "very close"
-	else if(dist <= 15)
-		proximity_text = "nearby"
-	var/z_text = ""
-	if(prey.z > user.z)
-		z_text = ", somewhere above"
-	else if(prey.z < user.z)
-		z_text = ", somewhere below"
-	to_chat(user, span_danger("The heart beats faster toward the [dir_text]. [prey.real_name] feels [proximity_text][z_text]."))
+	var/list/info = get_locator_info(user, prey)
+	to_chat(user, span_danger("The heart beats faster toward the [info["dir"]]. [prey.real_name] feels [info["proximity"]][info["z"]]."))
 	cooldown = world.time + 10 SECONDS
+
+/proc/get_locator_info(mob/user, atom/prey, detailed = TRUE)
+	var/list/info = list()
+	info["dir"] = dir2text(get_dir(user, prey))
+	info["z"] = ""
+	if(prey.z > user.z)
+		info["z"] = ", somewhere above"
+	else if(prey.z < user.z)
+		info["z"] = ", somewhere below"
+	info["proximity"] = ""
+	if(detailed)
+		var/dist = get_dist(user, prey)
+		info["proximity"] = "far away"
+		if(dist <= 5)
+			info["proximity"] = "very close"
+		else if(dist <= 15)
+			info["proximity"] = "nearby"
+	return info
 
 /datum/ritual/servantry/gutted
 	name = "Gutted Fish"
@@ -522,6 +565,9 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	if(!remnant)
 		return
 	var/mob/living/carbon/human/victim = remnant.fed_from
+	if(!curse_target(victim))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
 	qdel(remnant)
 	to_chat(user, span_notice("SLEEP IS SISTER TO DEATH, AND DEATH IS MY LADY'S DOMAIN. [uppertext(victim.real_name)] SHALL BECOME UNCONSCIOUS IN 30 SECONDS."))
 	victim.playsound_local(victim, 'sound/vo/mobs/ghost/whisper (1).ogg', 60, FALSE)
@@ -714,7 +760,7 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 /obj/item/clothing/head/roguetown/helmet/skullcap/cult
 	name = "ominous hood"
 	desc = "It echoes with ominous laughter. Worn over a skullcap"
-	icon_state = "warlockhood"
+	icon_state = "warlockhood2"
 	dynamic_hair_suffix = ""
 	flags_inv = HIDEEARS|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
 
@@ -779,10 +825,15 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	anchored = TRUE
 	max_integrity = 300
 	var/busy = FALSE
+	var/radius = 1
+	var/list/turf_data = list()
+	var/list/obj/structure/pylon/pylons = list()
+	var/list/obj/structure/raver/ravers = list()
 	var/list/recipes_made = list()
 	// list(name, typepath, time 2 produce, aspect, & if unrepeatable)
 	var/static/list/recipes = list(
-		list("Steel Ingot", /obj/item/ingot/steel, 20 SECONDS, null, FALSE),
+		list("Dark Shards", /obj/item/cultbrick, 40 SECONDS, null, FALSE),
+		list("Zizo Robe", /obj/item/clothing/cloak/cultrobe, 90 SECONDS, null, FALSE),
 		list("Snow Scythe (Bite)", /obj/item/rogueweapon/spear/bite, 90 SECONDS, "bite", TRUE),
 		list("Mortal Blade (Rot)", /obj/item/rogueweapon/sword/sabre/rot, 90 SECONDS, "rot", TRUE),
 		list("Forgotten Tool (Toil)", /obj/item/rogueweapon/mace/maul/toil, 90 SECONDS, "toil", TRUE),
@@ -824,6 +875,631 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	new spawn_type(get_turf(src))
 	visible_message(span_danger("The fuge disgorges [initial(produced.name)]!"))
 	playsound(src, 'sound/magic/blink.ogg', 40, TRUE)
+
+/obj/structure/fuge/Initialize(mapload)
+	. = ..()
+	var/turf/center = get_turf(src)
+	for(var/turf/T in range(radius, center))
+		if(isclosedturf(T) && !istype(T, /turf/closed/indestructible))
+			turf_data[T] = T.type
+			T.ChangeTurf(/turf/closed/wall/mineral/rogue/stone/space, flags = CHANGETURF_IGNORE_AIR)
+		else if(isopenturf(T) && !istype(T, /turf/open/floor/rogue/underworld/space/quiet/cult))
+			turf_data[T] = T.type
+			T.ChangeTurf(/turf/open/floor/rogue/underworld/space/quiet/cult, flags = CHANGETURF_IGNORE_AIR)
+
+/obj/structure/fuge/Destroy()
+	for(var/obj/structure/pylon/P as anything in pylons.Copy())
+		qdel(P)
+	pylons = null
+	for(var/obj/structure/raver/R as anything in ravers.Copy())
+		qdel(R)
+	ravers = null
+	for(var/turf/T in turf_data)
+		T.ChangeTurf(turf_data[T], flags = CHANGETURF_IGNORE_AIR)
+	turf_data.Cut()
+	return ..()
+
+/datum/ritual/transmutation/summonpylon
+	name = "Summon Pylon"
+	desc = "Conjure a device that siphons life essence from random people to create dark crystals. The target is given hints towards the pylon's location. Must be near a Fuge."
+	is_cultist_ritual = TRUE
+	center_requirement = /obj/item/candle/candlestick/gold
+	research_cost = 5
+
+/datum/ritual/transmutation/summonpylon/invoke(mob/living/user, turf/center)
+	var/obj/structure/fuge/nearby_fuge
+	for(var/obj/structure/fuge/F in range(5, center))
+		nearby_fuge = F
+		break
+	if(!nearby_fuge)
+		to_chat(user, span_warning("THIS MUST BE NEAR A FUGE!"))
+		return
+	var/datum/effect_system/spark_spread/S = new(center)
+	S.set_up(1, 1, center)
+	S.start()
+	new /obj/structure/pylon(center, nearby_fuge)
+
+/obj/structure/pylon
+	name = "pylon"
+	desc = "Herein is proven the false customs of the others."
+	icon = 'icons/roguetown/maniac/creations.dmi'
+	icon_state = "creation2"
+	density = TRUE
+	anchored = TRUE
+	max_integrity = 250
+	var/obj/structure/fuge/fuge
+	var/datum/beam/beam
+	var/busy = FALSE
+
+/obj/structure/pylon/Initialize(mapload, obj/structure/fuge/linked_fuge)
+	. = ..()
+	fuge = linked_fuge
+	if(fuge)
+		LAZYADD(fuge.pylons, src)
+		beam = fuge.Beam(src, time = INFINITY)
+
+/obj/structure/pylon/Destroy()
+	beam?.End()
+	beam = null
+	fuge?.pylons -= src
+	fuge = null
+	return ..()
+
+/obj/structure/pylon/proc/pick_target()
+	var/list/weighted = get_zizo_weighted_targets()
+	if(!weighted.len)
+		return
+	return pickweight(weighted)
+
+/obj/structure/pylon/attack_hand(mob/living/user)
+	. = ..()
+	if(.)
+		return
+	if(!is_zizo(user))
+		return
+	if(busy)
+		to_chat(user, span_warning("WORKING! WAIT!!!"))
+		return
+	var/mob/living/carbon/human/target = pick_target()
+	if(!target)
+		to_chat(user, span_warning("CAN'T FIND ANYONE."))
+		return
+	busy = TRUE
+	var/datum/status_effect/debuff/pylon_drain/drain = target.apply_status_effect(/datum/status_effect/debuff/pylon_drain)
+	drain.pylon = src
+	to_chat(user, span_notice("IT LATCHES ONTO [uppertext(target)]. IT WILL PRODUCE A DARK CRYSTAL IN 10 MINUTES. THEY MIGHT FIND THE PYLON."))
+	visible_message(span_danger("[src] vibrates menacingly!"))
+
+/datum/status_effect/debuff/pylon_drain
+	id = "pylon_drain"
+	duration = 10 MINUTES
+	tick_interval = 5 SECONDS
+	alert_type = /atom/movable/screen/alert/status_effect/debuff/pylon_drain
+	var/obj/structure/pylon/pylon
+
+/atom/movable/screen/alert/status_effect/debuff/pylon_drain
+	name = "BEING DRAINED"
+	desc = "Something is leeching away your lux!"
+
+/datum/status_effect/debuff/pylon_drain/tick()
+	if(!pylon || QDELETED(pylon))
+		qdel(src)
+		return
+	if(!prob(4))
+		return
+	var/mob/living/carbon/human/H = owner
+	switch(rand(1, 2))
+		if(1)
+			to_chat(H, span_danger("...[uppertext(dir2text(get_dir(H, pylon)))]..."))
+		if(2)
+			var/list/nearby_items = list()
+			for(var/obj/item/I in range(3, pylon))
+				nearby_items += I
+			if(!length(nearby_items))
+				return
+			var/obj/item/picked = pick(nearby_items)
+			if(prob(50))
+				to_chat(H, span_danger("...[uppertext(picked.name)]..."))
+			else
+				to_chat(H, span_danger("...[picked.desc]..."))
+
+/datum/status_effect/debuff/pylon_drain/on_remove()
+	. = ..()
+	if(!pylon || QDELETED(pylon))
+		return
+	pylon.busy = FALSE
+	if(duration != -1 && world.time >= duration && !QDELETED(owner) && owner.stat != DEAD)
+		if(owner.has_status_effect(/datum/status_effect/debuff/devitalised) || owner.has_status_effect(/datum/status_effect/debuff/devitalised/lux_ripped))
+			return FALSE
+		owner.apply_status_effect(/datum/status_effect/debuff/devitalised)
+		owner.Jitter(4)
+		owner.emote("scream")
+		playsound(owner, 'sound/gore/flesh_eat_04.ogg', 40, TRUE)
+		to_chat(owner, span_danger("THE LUX IS TORN FROM YOUR SOUL."))
+		new /obj/item/necro_relics/necro_crystal(get_turf(pylon))
+	playsound(pylon, 'sound/magic/blink.ogg', 40, TRUE)
+
+/datum/ritual/transmutation/summonraver
+	name = "Summon Raver"
+	desc = "Conjure a device that slowly corrupts non-cultists buckled to it. After the corruption is finished, they are given the chance to join the cult. If they refuse, the cult is given a crystal that can summon a new cultist in their place. Must be near a Fuge."
+	center_requirement = /obj/item/candle/candlestick/silver
+	is_cultist_ritual = TRUE
+	research_cost = 5
+
+/datum/ritual/transmutation/summonraver/invoke(mob/living/user, turf/center)
+	var/obj/structure/fuge/nearby_fuge
+	for(var/obj/structure/fuge/F in range(5, center))
+		nearby_fuge = F
+		break
+	if(!nearby_fuge)
+		to_chat(user, span_warning("THIS MUST BE BUILT NEAR A FUGE."))
+		return
+	var/datum/effect_system/spark_spread/S = new(center)
+	S.set_up(1, 1, center)
+	S.start()
+	new /obj/structure/raver(center, nearby_fuge)
+
+/obj/structure/raver
+	name = "raver"
+	desc = "There's sharp barbs on the squirming mass. You REALLY don't want to touch this."
+	icon = 'icons/effects/clan.dmi'
+	icon_state = "flesh_grip"
+	density = TRUE
+	anchored = TRUE
+	max_integrity = 250
+	can_buckle = TRUE
+	max_buckled_mobs = 1
+	buckle_lying = 0
+	buckleverb = "strap"
+	var/obj/structure/fuge/fuge
+	var/datum/beam/beam
+
+/obj/structure/raver/Initialize(mapload, obj/structure/fuge/linked_fuge)
+	. = ..()
+	fuge = linked_fuge
+	if(fuge)
+		LAZYADD(fuge.ravers, src)
+		beam = fuge.Beam(src, time = INFINITY)
+
+/obj/structure/raver/Destroy()
+	beam?.End()
+	beam = null
+	fuge?.ravers -= src
+	fuge = null
+	return ..()
+
+/obj/structure/raver/post_buckle_mob(mob/living/M)
+	. = ..()
+	if(is_zizo(M))
+		return
+	M.apply_status_effect(/datum/status_effect/raver_corruption, src)
+
+/obj/structure/raver/post_unbuckle_mob(mob/living/M)
+	. = ..()
+	M.remove_status_effect(/datum/status_effect/raver_corruption)
+
+/datum/status_effect/raver_corruption
+	id = "raver_corruption"
+	duration = -1
+	tick_interval = 5 SECONDS
+	alert_type = null
+	var/obj/structure/raver/raver
+	var/elapsed = 0
+
+/datum/status_effect/raver_corruption/on_creation(mob/living/new_owner, obj/structure/raver/device)
+	raver = device
+	. = ..()
+
+/datum/status_effect/raver_corruption/tick()
+	if(QDELETED(raver) || owner.buckled != raver || owner.stat == DEAD)
+		qdel(src)
+		return
+	owner.adjustStaminaLoss(5)
+	owner.Jitter(4)
+	if(prob(15))
+		owner.emote(pick("scream", "pain"))
+		to_chat(owner, span_userdanger(pick("MY MIND UNRAVELS...", "I FEEL MYSELF SLIPPING AWAY...", "THE PAIN IS UNBEARABLE...")))
+	elapsed += 5
+	if(elapsed >= 180)
+		raver_finish_corruption(owner, raver)
+		qdel(src)
+
+/proc/raver_finish_corruption(mob/living/carbon/human/H, obj/structure/raver/R)
+	set waitfor = FALSE
+	if(QDELETED(H) || H.stat == DEAD)
+		return
+	if(!QDELETED(R))
+		R.unbuckle_mob(H, force = TRUE)
+	var/answer = tgui_alert(H, "YOU WILL BE SHOWN THE TRUTH. DO YOU RESIST?", "???", list("Yield", "Resist"))
+	if(QDELETED(H) || H.stat == DEAD)
+		return
+	if(answer == "Yield")
+		if(H.mind)
+			H.mind.add_antag_datum(/datum/antagonist/zizocultist)
+			to_chat(H, span_notice("I see the truth now! It all makes so much sense! They aren't HERETICS! They want the BEST FOR US!"))
+	else
+		H.visible_message(span_danger("[H] thrashes around, unyielding!"))
+		absorb_lux(H, get_turf(H), FALSE)
+		new /obj/item/necro_relics/necro_crystal/cultist(get_turf(R || H))
+
+/turf/closed/wall/mineral/rogue/stone/space
+	name = "???"
+	desc = "???"
+	icon = 'icons/turf/roguefloor.dmi'
+	icon_state = "undervoid"
+
+/obj/item/cultbrick
+	name = "dark shards"
+	desc = "You could use these to make something."
+	icon = 'icons/obj/clockwork_objects.dmi'
+	icon_state = "shard_small3"
+	force = 5
+	throwforce = 5
+	w_class = WEIGHT_CLASS_SMALL
+	var/amount = 5
+	var/maxamount = 15
+
+/obj/item/cultbrick/Initialize(mapload)
+	. = ..()
+	update_shard_icon()
+
+/obj/item/cultbrick/proc/update_shard_icon()
+	if(amount >= 11)
+		icon_state = "shard_large1"
+	else if(amount >= 6)
+		icon_state = "shard_medium2"
+	else
+		icon_state = "shard_small3"
+
+/obj/item/cultbrick/examine(mob/user)
+	. = ..()
+	. += span_notice("There are [amount] shards in the stack.")
+
+/obj/item/cultbrick/attackby(obj/item/W, mob/living/user, params)
+	if(istype(W, /obj/item/cultbrick))
+		var/obj/item/cultbrick/B = W
+		if(amount + B.amount > maxamount)
+			B.amount = (amount + B.amount) - maxamount
+			amount = maxamount
+			B.update_shard_icon()
+			to_chat(user, span_warning("There's not enough space in [src]."))
+		else
+			to_chat(user, span_notice("I add [W] to [src]."))
+			amount += B.amount
+			qdel(B)
+		update_shard_icon()
+		return
+	return ..()
+
+/obj/item/cultbrick/attack_right(mob/user)
+	if(!amount)
+		return
+	switch(amount)
+		if(2)
+			var/obj/item/cultbrick/A = new(src.loc)
+			var/obj/item/cultbrick/B = new(src.loc)
+			A.amount = 1
+			B.amount = 1
+			user.put_in_hands(A)
+			user.put_in_hands(B)
+			qdel(src)
+		else
+			amount -= 1
+			update_shard_icon()
+			var/obj/item/cultbrick/F = new(src.loc)
+			F.amount = 1
+			user.put_in_hands(F)
+			user.visible_message(span_notice("[user] removes a shard from [src]."), span_notice("I remove a shard from [src]."))
+
+/obj/item/cultbrick/attack_self(mob/living/user)
+	if(!amount)
+		return
+	var/turf/T = get_step(user, user.dir)
+	if(!istype(T))
+		to_chat(user, span_warning("There's no room to build there."))
+		return
+	if(T.density && !istype(T, /turf/closed/wall) && !(locate(/obj/structure/mineral_door) in T))
+		to_chat(user, span_warning("There's no room to build there."))
+		return
+	var/nearby_fuge = FALSE
+	for(var/obj/structure/fuge/F in range(7, get_turf(user)))
+		nearby_fuge = TRUE
+		break
+	if(nearby_fuge == FALSE)
+		to_chat(user, span_warning("THIS MUST BE NEAR A FUGE!"))
+		return
+	var/choice = input(user, "BUILD", "ZIZO") as null|anything in list("Wall", "Door")
+	if(!choice || !amount)
+		return
+	if(!do_after(user, 10 SECONDS, target = T))
+		return
+	if(!amount)
+		return
+	var/obj/structure/mineral_door/old_door = locate() in T
+	if(old_door)
+		qdel(old_door)
+	if(istype(T, /turf/closed/wall))
+		T.ChangeTurf(/turf/open/floor/rogue/underworld/space/quiet/cult)
+	switch(choice)
+		if("Wall")
+			T.ChangeTurf(/turf/closed/wall/mineral/rogue/stone/space)
+		if("Door")
+			new /obj/structure/mineral_door/wood/donjon/stone/cult(T)
+	playsound(T, 'sound/foley/breaksound.ogg', 50, TRUE)
+	amount--
+	if(amount <= 0)
+		qdel(src)
+	else
+		update_shard_icon()
+
+/obj/structure/mineral_door/wood/donjon/stone/cult
+	name = "strange door"
+	desc = "What is this...? A door?"
+	icon_state = "cult"
+	base_state = "cult"
+	over_state = "cultopen"
+
+/obj/structure/mineral_door/wood/donjon/stone/cult/TryToSwitchState(mob/living/user)
+	if(!is_zizo(user))
+		to_chat(user, span_warning("[src] won't budge, no matter how I push."))
+		return FALSE
+	return ..()
+
+/obj/item/clothing/cloak/cultrobe
+	name = "zizo robe"
+	desc = "A very heavy robe made of protective fabric. It has a hood."
+	icon = 'modular_deserttown/icons/clothing/shadowcloak.dmi'
+	mob_overlay_icon = 'modular_deserttown/icons/clothing/onmob/shadowcloak.dmi'
+	icon_state = "warlock"
+	sleeved = 'modular_deserttown/icons/clothing/onmob/shadowcloak.dmi'
+	color = null
+	body_parts_covered = CHEST|GROIN|ARM_LEFT|ARM_RIGHT|LEG_LEFT|LEG_RIGHT
+	armor = ARMOR_LEATHER_GOOD
+	max_integrity = 200
+	hoodtype = /obj/item/clothing/head/hooded/cultrobehood
+	toggle_icon_state = FALSE
+	var/empowered = FALSE
+	var/active_item = FALSE
+	var/regen_timer
+
+/obj/item/clothing/cloak/cultrobe/Initialize(mapload)
+	. = ..()
+	GLOB.cult_robes += src
+	if(/datum/ritual/fleshcrafting/ascend in GLOB.zizo_researchable)
+		empower()
+
+/obj/item/clothing/cloak/cultrobe/Destroy()
+	GLOB.cult_robes -= src
+	deltimer(regen_timer)
+	return ..()
+
+/obj/item/clothing/head/hooded/cultrobehood
+	name = "hood"
+	desc = "Evil ass ZIZO hood."
+	icon = 'modular_deserttown/icons/clothing/head.dmi'
+	mob_overlay_icon = 'modular_deserttown/icons/clothing/onmob/head.dmi'
+	icon_state = "warlockhood"
+	item_state = "warlockhood"
+	slot_flags = ITEM_SLOT_HEAD
+	dynamic_hair_suffix = ""
+	body_parts_covered = HEAD
+	flags_inv = HIDEEARS|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+	block2add = FOV_BEHIND
+
+/obj/item/clothing/head/hooded/cultrobehood/empowered
+	icon_state = "ewarlockhood"
+	item_state = "ewarlockhood"
+
+/obj/item/clothing/cloak/cultrobe/equipped(mob/living/user, slot)
+	. = ..()
+	if(slot != SLOT_CLOAK || !empowered || active_item)
+		return
+	active_item = TRUE
+	if(!ishuman(user))
+		return
+	var/mob/living/carbon/human/H = loc
+	H.change_stat(STATKEY_STR, 2)
+	H.change_stat(STATKEY_PER, 2)
+	H.change_stat(STATKEY_INT, 2)
+	H.change_stat(STATKEY_CON, 2)
+	H.change_stat(STATKEY_WIL, 2)
+	H.change_stat(STATKEY_SPD, 2)
+	H.change_stat(STATKEY_LCK, 2)
+
+/obj/item/clothing/cloak/cultrobe/dropped(mob/living/user)
+	..()
+	if(!active_item)
+		return
+	if(!ishuman(user))
+		return
+	var/mob/living/carbon/human/H = loc
+	H.change_stat(STATKEY_STR, -2)
+	H.change_stat(STATKEY_PER, -2)
+	H.change_stat(STATKEY_INT, -2)
+	H.change_stat(STATKEY_CON, -2)
+	H.change_stat(STATKEY_WIL, -2)
+	H.change_stat(STATKEY_SPD, -2)
+	H.change_stat(STATKEY_LCK, -2)
+	active_item = FALSE
+
+/obj/item/clothing/cloak/cultrobe/proc/empower()
+	if(empowered)
+		return
+	empowered = TRUE
+	armor = ARMOR_ASCENDANT
+	max_integrity = 400
+	obj_integrity = max_integrity
+	icon_state = "ewarlock"
+	hoodtype = /obj/item/clothing/head/hooded/cultrobehood/empowered
+	if(ishuman(loc))
+		var/mob/living/carbon/human/H = loc
+		if(!active_item)
+			active_item = TRUE
+			H.change_stat(STATKEY_STR, 2)
+			H.change_stat(STATKEY_PER, 2)
+			H.change_stat(STATKEY_INT, 2)
+			H.change_stat(STATKEY_CON, 2)
+			H.change_stat(STATKEY_WIL, 2)
+			H.change_stat(STATKEY_SPD, 2)
+			H.change_stat(STATKEY_LCK, 2)
+		to_chat(H, span_userdanger("MY ROBE THRUMS WITH DARK POWER!"))
+		H.update_inv_cloak()
+	regen()
+
+/obj/item/clothing/cloak/cultrobe/proc/regen()
+	if(QDELETED(src) || !empowered)
+		return
+	if(obj_integrity < max_integrity)
+		obj_integrity = min(obj_integrity + 15, max_integrity)
+		if(obj_broken)
+			obj_fix(full_repair = FALSE)
+	regen_timer = addtimer(CALLBACK(src, PROC_REF(regen)), 1 MINUTES, TIMER_STOPPABLE)
+
+// HOUND & SNIFFER
+
+/obj/item/inqhound
+	name = "HOUND"
+	desc = "Our foes have surrendered themselves to destruction. Uses alchemical vials to produce blood vials for the SNIFFER."
+	icon = 'icons/roguetown/items/misc.dmi'
+	icon_state = "hound"
+	w_class = WEIGHT_CLASS_SMALL
+	grid_width = 64
+	grid_height = 32
+	obj_flags_ignore = TRUE
+	item_flags = NOBLUDGEON
+	var/bottles = 0
+	var/max_bottles = 5
+	var/list/obj/item/bloodvial/vials = list()
+
+/obj/item/inqhound/proc/update_hound_icon()
+	icon_state = "hound"
+
+/obj/item/inqhound/attackby(obj/item/I, mob/living/user, params)
+	if(!istype(I, /obj/item/reagent_containers/glass/bottle/alchemical))
+		return ..()
+	if(bottles >= max_bottles)
+		to_chat(user, span_warning("[src] is full!"))
+		return
+	qdel(I)
+	bottles++
+
+/obj/item/inqhound/attack_right(mob/user)
+	. = ..()
+	if(!length(vials))
+		to_chat(user, span_warning("[src] is empty."))
+		return
+	var/obj/item/bloodvial/V = vials[1]
+	vials -= V
+	user.put_in_hands(V)
+	update_hound_icon()
+
+/obj/item/inqhound/attack_obj(obj/O, mob/living/user)
+	var/list/blood = O.return_blood_DNA()
+	if(!length(blood))
+		to_chat(user, span_warning("[src] finds nothing."))
+		return TRUE
+	if(!bottles)
+		to_chat(user, span_warning("[src] is empty."))
+		return TRUE
+	icon_state = "hound_active"
+	var/success = do_after(user, 3 SECONDS, target = O)
+	var/list/final_blood = O.return_blood_DNA()
+	if(!success || !length(final_blood))
+		update_hound_icon()
+		return TRUE
+	bottles--
+	var/obj/item/bloodvial/V = new(src)
+	V.blood_dna = final_blood.Copy()
+	V.name = "vial of blood ([english_list(V.blood_dna)])"
+	vials += V
+	to_chat(user, span_notice("[src] fills a vial."))
+	update_hound_icon()
+	return TRUE
+
+/obj/item/bloodvial
+	name = "vial of blood"
+	desc = "A collected blood sample."
+	icon = 'icons/roguetown/items/misc.dmi'
+	icon_state = "hound_vial_full"
+	w_class = WEIGHT_CLASS_TINY
+	var/list/blood_dna
+	var/mob/living/carbon/human/target
+	var/expiry
+
+/obj/item/bloodvial/Initialize(mapload)
+	. = ..()
+	expiry = world.time + 10 MINUTES
+
+/obj/item/bloodvial/examine(mob/user)
+	. = ..()
+	if(world.time > expiry)
+		. += span_warning("It is rotten and shall not work.")
+	else
+		. += span_notice("The blood shall rot in [round((expiry - world.time) / (1 MINUTES))] minutes.")
+
+/obj/item/inqscanner
+	name = "SNIFFER"
+	desc = "For we have the greater wisdom. Utilizes blood vials from the HOUND to track targets."
+	icon = 'icons/roguetown/items/misc.dmi'
+	icon_state = "scanner"
+	w_class = WEIGHT_CLASS_SMALL
+	slot_flags = ITEM_SLOT_BELT
+	grid_width = 64
+	grid_height = 32
+	var/obj/item/bloodvial/vial
+
+/obj/item/inqscanner/attackby(obj/item/I, mob/living/user, params)
+	if(!istype(I, /obj/item/bloodvial))
+		return ..()
+	if(vial)
+		to_chat(user, span_warning("[src] is full!"))
+		return
+	var/obj/item/bloodvial/V = I
+	if(world.time > V.expiry)
+		to_chat(user, span_warning("The blood is rotten!"))
+		qdel(V)
+		return
+	if(!V.target)
+		for(var/mob/living/carbon/human/H in GLOB.human_list)
+			if(H.dna && (H.dna.unique_enzymes in V.blood_dna))
+				V.target = H
+				break
+	if(!V.target)
+		to_chat(user, span_warning("[src] can't find anything!"))
+		qdel(V)
+		return
+	user.transferItemToLoc(V, src)
+	vial = V
+
+/obj/item/inqscanner/attack_right(mob/user)
+	. = ..()
+	if(!vial)
+		return
+	user.put_in_hands(vial)
+	vial = null
+
+/obj/item/inqscanner/attack_self(mob/living/user)
+	if(!vial || world.time > vial.expiry)
+		if(vial)
+			to_chat(user, span_warning("The vial has gone rotten."))
+			qdel(vial)
+		else
+			to_chat(user, span_warning("[src] can't find anything."))
+		vial = null
+		return
+	var/mob/living/carbon/human/target = vial.target
+	if(!target || QDELETED(target) || target.stat == DEAD)
+		to_chat(user, span_warning("[src] can't find anything."))
+		qdel(vial)
+		vial = null
+		return
+	var/dist = get_dist(user, target)
+	if(dist <= 10)
+		var/list/info = get_locator_info(user, target, detailed = FALSE)
+		to_chat(user, span_notice("[src] pulls towards the [info["dir"]][info["z"]]."))
+	else
+		var/list/info = get_locator_info(user, target)
+		to_chat(user, span_notice("[src] pulls towards the [info["dir"]]. The scent feels [info["proximity"]][info["z"]]."))
 
 /datum/ritual/transmutation/summonweapon
 	name = "Summon Weapons"
@@ -923,7 +1599,7 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	var/mob/living/carbon/human/target = locate() in center.contents
 	if(!target)
 		return
-	ADD_TRAIT(user, TRAIT_NOPAIN, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOPAIN, TRAIT_GENERIC)
 	to_chat(target, span_notice("I no longer feel pain."))
 
 /datum/ritual/fleshcrafting/immortality
@@ -940,20 +1616,20 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 		to_chat(user, span_danger("The sacrifice must be an Aasimar."))
 		return
 	victim.set_species(/datum/species/human/northern)
-	ADD_TRAIT(user, TRAIT_NOPAIN, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NODEATH, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NOLIMBDISABLE, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NODISMEMBER, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_TOXIMMUNE, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NOBREATH, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_BLOODLOSS_IMMUNE, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NOHARDCRIT, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_ZOMBIE_IMMUNE, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_EXTREME_TEMPERATURE_IMMUNE, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_PACIFISM, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_NOSOFTCRIT, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_SPELLCOCKBLOCK, TRAIT_GENERIC)
-	ADD_TRAIT(user, TRAIT_MONSTROUS, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOPAIN, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NODEATH, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOLIMBDISABLE, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NODISMEMBER, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_TOXIMMUNE, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOBREATH, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_BLOODLOSS_IMMUNE, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOHARDCRIT, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_ZOMBIE_IMMUNE, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_EXTREME_TEMPERATURE_IMMUNE, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_PACIFISM, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_NOSOFTCRIT, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_SPELLCOCKBLOCK, TRAIT_GENERIC)
+	ADD_TRAIT(target, TRAIT_MONSTROUS, TRAIT_GENERIC)
 	to_chat(target, span_notice("ZIZO EMPOWERS ME!! SOMETHING HAS GONE WRONG, THE RITUAL FAILED BUT WHAT IT LEFT ME WITH IS STILL POWER!!"))
 	target.mind.AddSpell(new /obj/effect/proc_holder/spell/self/regenerate)
 	target.change_stat(STATKEY_STR, -3)
@@ -1369,10 +2045,13 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 	if(dews >= 4)
 		cardinal_success = TRUE
 
-	for(var/atom/A in loc.contents)
-		if(istype(A, pickritual.center_requirement))
-			center_success = TRUE
-			break
+	if(!pickritual.center_requirement)
+		center_success = TRUE
+	else
+		for(var/atom/A in loc.contents)
+			if(istype(A, pickritual.center_requirement))
+				center_success = TRUE
+				break
 
 	if(!cardinal_success)
 		to_chat(user, span_danger("Ritual requires: [pickritual.hugbox()]"))
@@ -1426,6 +2105,7 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 			M.update_inv_gloves()
 		var/obj/effect/decal/cleanable/sigil/C = new(src)
 		C.set_sigil_type(sigiltype)
+		C.add_mob_blood(M)
 		playsound(M, 'sound/items/write.ogg', 100)
 		var/list/sigilsPath = list(
 			/obj/effect/decal/cleanable/sigil/N,
@@ -1440,7 +2120,8 @@ GLOBAL_VAR_INIT(zizo_target_cd, 0)
 		for(var/i = 1; i <= GLOB.alldirs.len; i++)
 			var/turf/floor = get_step(src, GLOB.alldirs[i])
 			var/sigil = sigilsPath[i]
-			new sigil(floor)
+			var/obj/effect/decal/cleanable/sigil/satellite = new sigil(floor)
+			satellite.add_mob_blood(M)
 
 /mob/living/carbon/human/proc/draw_sigil()
 	set name = "Draw Sigil"

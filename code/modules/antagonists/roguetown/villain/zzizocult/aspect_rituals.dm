@@ -1,5 +1,6 @@
 GLOBAL_LIST_EMPTY(zizo_portals)
 GLOBAL_LIST_EMPTY(gate_targets)
+GLOBAL_LIST_EMPTY(cult_robes)
 
 GLOBAL_LIST_INIT(zizo_researchable, list(
 	/datum/ritual/servantry/convert, /datum/ritual/servantry/sacrifice,
@@ -12,14 +13,17 @@ GLOBAL_LIST_INIT(zizo_researchable, list(
 	/datum/ritual/fleshcrafting/fleshmend/greater, /datum/ritual/fleshcrafting/darkeyes,
 	/datum/ritual/fleshcrafting/nopain, /datum/ritual/fleshcrafting/immortality,
 	/datum/ritual/transmutation/summonarmor, /datum/ritual/transmutation/summonweapon,
+	/datum/ritual/transmutation/summonfuge,
+	/datum/ritual/transmutation/summonpylon, /datum/ritual/transmutation/summonraver,
 	/datum/ritual/transmutation/propaganda, /datum/ritual/servantry/sleepcurse,
 	/datum/ritual/strand/dream_jaunt, /datum/ritual/strand/strandsend,
 	/datum/ritual/strand/strandrecall, /datum/ritual/toil/progress,
-	/datum/ritual/toil/mend, /datum/ritual/toil/cultoffer,
-	/datum/ritual/bite/necromancy, /datum/ritual/bite/raisedeadite,
+	/datum/ritual/toil/summonysis, /datum/ritual/toil/fulmenor,
+	/datum/ritual/bite/necromancy, /datum/ritual/bite/resurrection,
+	/datum/ritual/bite/thanatophobia,
 	/datum/ritual/rot/transfuse, /datum/ritual/rot/blight,
 	/datum/ritual/rot/plague, /datum/ritual/noise/thermalvis,
-	/datum/ritual/noise/ghost_form, /datum/ritual/noise/forgettongue,
+ 	/datum/ritual/noise/forgettongue, /datum/ritual/noise/witchery,
 	/datum/ritual/pitch/fireresist, /datum/ritual/pitch/shadowform,
 	/datum/ritual/pitch/lightcurse, /datum/ritual/blood/transfuse,
 	/datum/ritual/blood/bloodsnare, /datum/ritual/blood/bloodbond,
@@ -85,7 +89,7 @@ GLOBAL_DATUM_INIT(zizo_research, /datum/zizo_research, new)
 /proc/is_zizo(mob/M)
 	return M && (is_zizocultist(M.mind) || is_zizolackey(M.mind))
 
-/proc/absorb_lux(mob/living/carbon/human/target, turf/T)
+/proc/absorb_lux(mob/living/carbon/human/target, turf/T, give_crystal = TRUE)
 	if(target.has_status_effect(/datum/status_effect/debuff/devitalised) || target.has_status_effect(/datum/status_effect/debuff/devitalised/lux_ripped))
 		return FALSE
 	target.apply_status_effect(/datum/status_effect/debuff/devitalised/lux_ripped)
@@ -100,7 +104,8 @@ GLOBAL_DATUM_INIT(zizo_research, /datum/zizo_research, new)
 	playsound(target, 'sound/gore/flesh_eat_04.ogg', 60, TRUE)
 	target.purity = FALSE
 	to_chat(target, span_danger("THE LUX IS TORN FROM YOUR SOUL. YOUR MEMORY BECOMES A BLUR. YOU CAN'T REMEMBER WHO DID THIS TO YOU, OR ANY DETAILS ABOUT HOW IT HAPPENED."))
-	new /obj/item/necro_relics/necro_crystal(T)
+	if(give_crystal)
+		new /obj/item/necro_relics/necro_crystal(T)
 	return TRUE
 
 /proc/find_remnant(mob/user, turf/center)
@@ -112,24 +117,23 @@ GLOBAL_DATUM_INIT(zizo_research, /datum/zizo_research, new)
 			return L
 	to_chat(user, span_warning("Empty."))
 
+/datum/status_effect/buff/curse_immunity
+	id = "curse_immunity"
+	duration = 30 MINUTES
+	alert_type = null
+
+/proc/curse_target(mob/living/target)
+	if(!target || target.has_status_effect(/datum/status_effect/buff/curse_immunity))
+		return FALSE
+	target.apply_status_effect(/datum/status_effect/buff/curse_immunity, 30 MINUTES)
+	return TRUE
+
 /proc/recolor_accessory(accessory_type, hex)
 	var/datum/sprite_accessory/A = SPRITE_ACCESSORY(accessory_type)
 	var/list/colors = list()
 	for(var/i in 1 to A.color_keys)
 		colors += "#[hex]"
 	return color_list_to_string(colors)
-
-/proc/pick_deadite(mob/living/carbon/human/H, title)
-	var/list/choices = list()
-	for(var/mob/living/D in H.deadites_controlled)
-		if(!QDELETED(D) && D.stat != DEAD)
-			choices += D
-	if(!length(choices))
-		to_chat(H, span_warning("No deadites left."))
-		H.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/deadite_sight)
-		H.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/deadite_burst)
-		return
-	return input(H, title, "DEADITE") as null|anything in choices
 
 
 /datum/ritual/strand
@@ -268,16 +272,20 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	var/mob/living/carbon/human/target = locate() in center.contents
 	if(gate_count > 0)
 		if(!target || target == user)
-			to_chat(user, span_warning("A sacrifice must lie in the center. I also need another cultist on the rune with a knife in their hand. The sacrifice must be desired by ZIZO, which can be tracked by heartaches."))
+			to_chat(user, span_warning("A sacrifice must lie in the center."))
+			new /obj/item/necro_relics/necro_crystal(center)
 			return
 		if(is_zizo(target))
 			to_chat(user, span_warning("This is a cultist."))
+			new /obj/item/necro_relics/necro_crystal(center)
 			return
 		if(!(target in GLOB.gate_targets))
 			to_chat(user, span_warning("She does not want this one."))
+			new /obj/item/necro_relics/necro_crystal(center)
 			return
 		if(istype(target.wear_neck, /obj/item/clothing/neck/roguetown/psicross/silver))
 			to_chat(user, span_danger("They are wearing silver, it resists the dark magick!"))
+			new /obj/item/necro_relics/necro_crystal(center)
 			return
 	refill_bestow_areas()
 	var/area/here = get_area(center)
@@ -315,30 +323,14 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 		to_chat(user, span_boldnotice("Gate opened! [3 - gate_count] more to unlock Ascension!"))
 	if(gate_count == 3)
 		GLOB.zizo_researchable |= /datum/ritual/fleshcrafting/ascend
+		for(var/obj/item/clothing/cloak/cultrobe/robe as anything in GLOB.cult_robes)
+			robe.empower()
 
 	if(gate_count > 0)
-		var/list/weighted = list()
-		for(var/mob/living/carbon/human/H in GLOB.human_list)
-			if(!H.mind || H.stat == DEAD || is_zizo(H))
-				continue
-			var/datum/job/J = SSjob.GetJob(H.mind.assigned_role)
-			if(!J || (J.type in list(KING_QUEEN_ROLES)) || J.type == /datum/job/roguetown/bandit || J.type == /datum/job/roguetown/wretch)
-				continue
-			if(gate_count == 1 && !(J.type in (list(TIER_TWO_GATEROLES))))
-				continue
-			if(gate_count > 1 && !(J.type in (list(TIER_THREE_GATEROLES))))
-				continue
-			weighted[H] = 1
-			if(H.purity == TRUE)
-				weighted[H] = 5
+		reroll_gate_targets(gate_count)
 
-		GLOB.gate_targets = list()
-		for(var/i in 1 to 5)
-			if(!weighted.len)
-				break
-			var/mob/living/carbon/human/chosen = pickweight(weighted)
-			GLOB.gate_targets += chosen
-			weighted -= chosen
+	if(target && !is_zizo(target))
+		absorb_lux(target, get_turf(target), FALSE)
 
 	for(var/datum/mind/M in SSmapping.retainer.cultists)
 		if(M.current)
@@ -351,6 +343,36 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(zizo_bestow_alert), here), 30 SECONDS)
 
 // WEAPONS
+
+/datum/component/soulbound_weapon
+	dupe_mode = COMPONENT_DUPE_UNIQUE
+	var/datum/weakref/owner_ref
+	var/skill_path
+
+/datum/component/soulbound_weapon/Initialize(skill_path_type)
+	. = ..()
+	if(!isitem(parent))
+		return COMPONENT_INCOMPATIBLE
+	skill_path = skill_path_type
+	RegisterSignal(parent, COMSIG_ITEM_EQUIPPED, PROC_REF(on_equip))
+
+/datum/component/soulbound_weapon/proc/on_equip(datum/source, mob/user, slot)
+	SIGNAL_HANDLER
+	if(slot != ITEM_SLOT_HANDS || !ishuman(user))
+		return
+	var/mob/living/carbon/human/H = user
+	var/obj/item/weapon = parent
+	if(!owner_ref)
+		owner_ref = WEAKREF(H)
+		if(skill_path)
+			H.adjust_skillrank_up_to(skill_path, SKILL_LEVEL_MASTER)
+		to_chat(H, span_danger("I feel [weapon] bind itself to me!"))
+		return
+	if(owner_ref.resolve() == H)
+		return
+	to_chat(H, span_danger("[uppertext(weapon)] HATES ME!"))
+	H.dropItemToGround(weapon)
+
 /datum/intent/dagger/thrust/cult
 	penfactor = 100
 
@@ -366,6 +388,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 /obj/item/rogueweapon/sword/long/noise
 	name = "madman blade"
 	desc = ""
+	icon = 'icons/roguetown/weapons/swords64.dmi'
 	icon_state = "hagsword"
 	max_integrity = 9999
 	max_blade_int = 9999
@@ -373,18 +396,50 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	force_wielded = 35
 	smeltresult = null
 	sheathe_icon = "hagsword"
+	special = /datum/special_intent/madman_delusion
+
+/obj/item/rogueweapon/sword/long/noise/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/swords)
+
+/datum/special_intent/madman_delusion
+	name = "Cruelty"
+	desc = "Induce a maddened state in the foe. It drives them to commit unspeakable violence against ally and foe alike."
+	tile_coordinates = list(list(0,0))
+	use_clickloc = TRUE
+	respect_adjacency = FALSE
+	range = 6
+	post_icon_state = "strike"
+	pre_icon_state = "trap"
+	delay = 0.5 SECONDS
+	cooldown = 30 SECONDS
+	stamcost = 20
+	var/dam = 15
+	var/frenzy_duration = 8 SECONDS
+
+/datum/special_intent/madman_delusion/apply_hit(turf/T)
+	for(var/mob/living/carbon/human/L in get_hearers_in_view(0, T))
+		if(L != howner)
+			apply_generic_weapon_damage(L, dam, "slash", BODY_ZONE_HEAD, bclass = BCLASS_CUT)
+			L.enter_frenzymod()
+			addtimer(CALLBACK(L, TYPE_PROC_REF(/mob/living/carbon, exit_frenzymod)), frenzy_duration)
+	..()
 
 /obj/item/rogueweapon/huntingknife/idagger/steel/blood
 	name = "slave knife"
 	desc = "A blade wielded by blood-pit slaves in the chaotic age after PSYDON's death. This one is permanently wet with blood."
 	icon_state = "graggardagger"
 	sheathe_icon = "graggardagger"
-	force = 10
+	force = 15
 	max_integrity = 9999
 	max_blade_int = 9999
 	smeltresult = null
 	special = /datum/special_intent/ignite_dagger
 	possible_item_intents =	list(/datum/intent/dagger/thrust/cult,/datum/intent/dagger/cut/cult)
+
+/obj/item/rogueweapon/huntingknife/idagger/steel/blood/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/knives)
 
 /obj/item/rogueweapon/huntingknife/idagger/steel/pitch
 	name = "astrata-touched dagger"
@@ -398,6 +453,10 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	special = /datum/special_intent/ignite_dagger
 	var/active_intents =	list(/datum/intent/dagger/thrust/cult,/datum/intent/dagger/cut/cult)
 	var/inactive_intents = list()
+
+/obj/item/rogueweapon/huntingknife/idagger/steel/pitch/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/knives)
 
 /datum/special_intent/ignite_dagger
 	name = "Ignite Dagger"
@@ -441,6 +500,10 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	sellprice = 50
 	smeltresult = null
 	special = /datum/special_intent/coat_blade
+
+/obj/item/rogueweapon/sword/sabre/rot/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/swords)
 
 /datum/special_intent/coat_blade
 	name = "Coat Blade"
@@ -496,6 +559,190 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	bigboy = TRUE
 	gripsprite = TRUE
 	walking_stick = TRUE
+	special = /datum/special_intent/deploy_turret
+	var/list/obj/structure/toilturret/turrets = list()
+	var/max_turrets = 3
+
+/obj/item/rogueweapon/mace/maul/toil/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/maces)
+
+/obj/item/rogueweapon/mace/maul/toil/equipped(mob/user, slot, initial)
+	. = ..()
+	if(slot != ITEM_SLOT_HANDS || !user.mind)
+		return
+	user.mind.AddSpell(new /obj/effect/proc_holder/spell/self/direct_turrets)
+	user.mind.AddSpell(new /obj/effect/proc_holder/spell/self/scrap_turrets)
+
+/obj/item/rogueweapon/mace/maul/toil/dropped(mob/user, silent)
+	. = ..()
+	if(!user.mind)
+		return
+	user.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/direct_turrets)
+	user.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/scrap_turrets)
+
+/obj/effect/proc_holder/spell/self/direct_turrets
+	name = "Direct Turrets"
+	desc = "Target a specific person with your turrets!"
+	recharge_time = 10 SECONDS
+	chargedloop = null
+
+/obj/effect/proc_holder/spell/self/direct_turrets/cast(list/targets, mob/living/user = usr)
+	. = ..()
+	var/obj/item/rogueweapon/mace/maul/toil/W = user.get_active_held_item()
+	if(!istype(W))
+		to_chat(user, span_warning("I must hold the Tool."))
+		revert_cast()
+		return FALSE
+	var/list/possible = list()
+	for(var/mob/living/carbon/human/H in oview(7, user))
+		possible += H
+	if(!length(possible))
+		to_chat(user, span_warning("No one detected."))
+		revert_cast()
+		return FALSE
+	var/mob/living/carbon/human/target = input(user, "TARGET", "ZIZO") as null|anything in possible
+	if(!target)
+		revert_cast()
+		return FALSE
+	for(var/obj/structure/toilturret/existing as anything in W.turrets.Copy())
+		if(QDELETED(existing))
+			W.turrets -= existing
+			continue
+		existing.forced_target = target
+	to_chat(user, span_notice("TURRET LOCK: [target]."))
+	return TRUE
+
+/obj/effect/proc_holder/spell/self/scrap_turrets
+	name = "Scrap Turrets"
+	desc = "Disassemble all sentries."
+	recharge_time = 5 SECONDS
+	chargedloop = null
+
+/obj/effect/proc_holder/spell/self/scrap_turrets/cast(list/targets, mob/living/user = usr)
+	. = ..()
+	var/obj/item/rogueweapon/mace/maul/toil/W = user.get_active_held_item()
+	if(!istype(W))
+		to_chat(user, span_warning("I must hold the Tool."))
+		revert_cast()
+		return FALSE
+	for(var/obj/structure/toilturret/existing as anything in W.turrets.Copy())
+		qdel(existing)
+	W.turrets = list()
+	to_chat(user, span_notice("My sentries have disassembled."))
+	return TRUE
+
+/datum/special_intent/deploy_turret
+	name = "Deploy Turret"
+	desc = "Buildin' a Sentry."
+	tile_coordinates = list(list(0,0))
+	post_icon_state = "strike"
+	pre_icon_state = "trap"
+	delay = 4 SECONDS
+	cooldown = 20 SECONDS
+	stamcost = 20
+	use_doafter = TRUE
+
+/datum/special_intent/deploy_turret/apply_hit(turf/T)
+	..()
+	var/obj/item/rogueweapon/mace/maul/toil/W = iparent
+	if(!istype(W))
+		return
+	for(var/obj/structure/toilturret/existing as anything in W.turrets.Copy())
+		if(QDELETED(existing))
+			W.turrets -= existing
+	if(length(W.turrets) >= W.max_turrets)
+		to_chat(howner, span_warning("I can only have [W.max_turrets] sentries!."))
+		return
+	if(T.density)
+		to_chat(howner, span_warning("There's no room for a sentry there."))
+		return
+	var/obj/structure/toilturret/turret = new(T, howner, W)
+	W.turrets += turret
+	to_chat(howner, span_notice("The turret whirs to life!"))
+
+/obj/structure/toilturret
+	name = "cog turret"
+	desc = "There's a horrible familiarity to its shape. You swore you haven't seen it before."
+	icon = 'icons/obj/clockwork_objects.dmi'
+	icon_state = "ocular_warden"
+	density = TRUE
+	anchored = TRUE
+	max_integrity = 150
+	var/mob/living/carbon/human/owner
+	var/obj/item/rogueweapon/mace/maul/toil/source_wrench
+	var/range = 5
+	var/cooldown = 0
+	var/active = TRUE
+	var/mob/living/carbon/human/forced_target
+
+/obj/structure/toilturret/Initialize(mapload, mob/living/carbon/human/builder, obj/item/rogueweapon/mace/maul/toil/wrench)
+	. = ..()
+	owner = builder
+	source_wrench = wrench
+	START_PROCESSING(SSobj, src)
+
+/obj/structure/toilturret/Destroy()
+	STOP_PROCESSING(SSobj, src)
+	source_wrench?.turrets -= src
+	source_wrench = null
+	owner = null
+	forced_target = null
+	return ..()
+
+/obj/structure/toilturret/attack_right(mob/living/user, params)
+	. = ..()
+	if(!istype(user.get_active_held_item(), /obj/item/rogueweapon/mace/maul/toil))
+		return
+	active = !active
+	if(active)
+		icon_state = "ocular_warden"
+	else
+		icon_state = "ocular_warden_unwrenched"
+
+/obj/structure/toilturret/process()
+	if(!active)
+		return
+	if(world.time < cooldown)
+		return
+	if(!owner)
+		qdel(src)
+		return
+	var/mob/living/carbon/human/target
+	if(forced_target && !QDELETED(forced_target) && forced_target.stat != DEAD && (forced_target in view(range, src)))
+		target = forced_target
+	else
+		for(var/mob/living/carbon/human/H in view(range, src))
+			if(H == owner || is_zizo(H) || H.stat == DEAD)
+				continue
+			target = H
+			break
+	if(!target)
+		return
+	cooldown = world.time + 20
+	visible_message(span_danger("[src] takes aim at [target]!"))
+	var/turf/startloc = get_turf(src)
+	var/obj/projectile/P = new /obj/projectile/toilbolt(startloc)
+	playsound(src, 'sound/combat/hits/onmetal/metalimpact (1).ogg', 60, TRUE)
+	P.starting = startloc
+	P.fired_from = src
+	P.yo = target.y - startloc.y
+	P.xo = target.x - startloc.x
+	P.original = target
+	P.preparePixelProjectile(target, src)
+	P.fire()
+
+/obj/projectile/toilbolt
+	name = "bolt"
+	icon = 'icons/roguetown/weapons/ammo.dmi'
+	icon_state = "musketball_proj"
+	damage = 15
+	damage_type = BRUTE
+	armor_penetration = 10
+	range = 15
+	hitsound = 'sound/combat/hits/hi_bolt (1).ogg'
+	flag = "piercing"
+	speed = 2
 
 /obj/item/rogueweapon/contraption/linker/mace/big/getonmobprop(tag)
 	. = ..()
@@ -536,6 +783,33 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	wdefense = 6
 	thrown_bclass = BCLASS_BLUNT
 	throwforce = 10
+	special = /datum/special_intent/scythe_cone
+
+/obj/item/rogueweapon/spear/bite/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/polearms)
+
+/datum/special_intent/scythe_cone
+	name = "Snow Stance"
+	desc = "Use a strong attack to coat the earth with running frost."
+	tile_coordinates = list(
+		list(0,0),
+		list(-1,1), list(0,1), list(1,1),
+		list(-2,2), list(-1,2), list(0,2), list(1,2), list(2,2)
+	)
+	post_icon_state = "shieldsparkles"
+	pre_icon_state = "frost"
+	delay = 0.6 SECONDS
+	cooldown = 25 SECONDS
+	stamcost = 20
+	var/dam = 15
+
+/datum/special_intent/scythe_cone/apply_hit(turf/T)
+	for(var/mob/living/carbon/human/L in get_hearers_in_view(0, T))
+		if(L != howner)
+			apply_generic_weapon_damage(L, dam, "slash", BODY_ZONE_CHEST, bclass = BCLASS_CUT)
+			L.apply_status_effect(/datum/status_effect/buff/frostbite)
+	..()
 
 /obj/item/rogueweapon/scythe/getonmobprop(tag)
 	. = ..()
@@ -629,6 +903,9 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	if(!remnant)
 		return
 	var/mob/living/carbon/human/victim = remnant.fed_from
+	if(!curse_target(victim))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
 	qdel(remnant)
 	to_chat(user, span_notice("ALL MEN OBEY THE DREAMCALL. I HAVE 1 MINUTE TO PREPARE. ANYONE I AM GRABBING WILL BE BROUGHT WITH ME."))
 	to_chat(victim, span_userdanger("I FEEL SOMETHING HORRIBLE COMING. I HAVE 1 MINUTE TO PREPARE. ANYONE I AM GRABBING WILL BE BROUGHT WITH ME."))
@@ -644,32 +921,50 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 // TOIL
 
-/obj/effect/proc_holder/spell/invoked/toil_mend
+/obj/effect/proc_holder/spell/invoked/projectile/toil_mend
 	name = "Mend"
-	desc = "Heals the target and mends their equipment."
+	desc = "Shoot mending lightning that heals the target and fixes their equipment."
+	clothes_req = FALSE
 	overlay_icon = 'icons/mob/actions/zizomiracles.dmi'
 	action_icon = 'icons/mob/actions/zizomiracles.dmi'
 	overlay_state = "toil"
 	sound = 'sound/magic/lightning.ogg'
 	range = 7
+	projectile_type = /obj/projectile/magic/mendbolt
+	chargetime = 15
 	recharge_time = 10 SECONDS
 	chargedloop = null
 
-/obj/effect/proc_holder/spell/invoked/toil_mend/cast(list/targets, mob/living/user)
+/obj/projectile/magic/mendbolt
+	name = "bolt of mending"
+	tracer_type = /obj/effect/projectile/tracer/stun
+	muzzle_type = null
+	impact_type = null
+	hitscan = TRUE
+	movement_type = UNSTOPPABLE
+	light_color = "#00ff00"
+	damage = 0
+	nodamage = TRUE
+	speed = 0.3
+	flag = "magic"
+	light_outer_range = 7
+
+/obj/projectile/magic/mendbolt/on_hit(target)
 	. = ..()
-	var/mob/living/carbon/human/target = targets[1]
-	if(!ishuman(target))
-		return FALSE
-	if(target == user)
-		to_chat(user, span_notice("ALL THINGS MAY BE REPAIRED, BUT NOT YOUR OWN BODY. FOOL."))
-		return FALSE
-	target.electrocute_act(1, src, 1, SHOCK_NOSTUN)
-	playsound(target, 'sound/magic/lightning.ogg', 60, TRUE)
-	target.apply_status_effect(/datum/status_effect/buff/healing, 10, TRUE)
-	for(var/obj/item/I in target.get_equipped_items())
-		I.obj_integrity = min(I.obj_integrity + (I.max_integrity * 0.2), I.max_integrity)
-	to_chat(target, span_notice("I AM MENDED!"))
-	return TRUE
+	if(ismob(target) && isliving(target))
+		var/mob/living/L = target
+		if(L.anti_magic_check())
+			visible_message(span_warning("[src] fizzles on contact with [target]!"))
+			playsound(get_turf(target), 'sound/magic/magic_nulled.ogg', 100)
+			qdel(src)
+			return BULLET_ACT_BLOCK
+		L.apply_status_effect(/datum/status_effect/buff/healing, 10, TRUE)
+		if(ishuman(L))
+			var/mob/living/carbon/human/H = L
+			for(var/obj/item/I in H.get_equipped_items())
+				I.obj_integrity = min(I.obj_integrity + (I.max_integrity * 0.2), I.max_integrity)
+		to_chat(L, span_notice("I AM MENDED!"))
+	qdel(src)
 
 /datum/ritual/toil/progress
 	name = "Mend"
@@ -678,61 +973,98 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	research_cost = 3
 
 /datum/ritual/toil/progress/apply_passive(mob/living/carbon/human/H)
-	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/toil_mend)
+	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/projectile/toil_mend)
 	return
 
-/datum/ritual/toil/mend
-	name = "Mend"
-	desc = "Perform a rite that fully heals and fully repairs anyone or anything in the center of the sigil. Can revive if a dark crystal is used."
+/datum/ritual/toil/summonysis
+	name = "Summon Ysis"
+	desc = "Summon a machine that heals and mends the equipment of anyone who activates it."
+	center_requirement = /obj/item/bedsheet
+	research_cost = 5
 
-/datum/ritual/toil/mend/invoke(mob/living/user, turf/center)
-	for(var/obj/item/I in center)
-		I.obj_integrity = I.max_integrity
-		I.shoddy_repair = FALSE
-		I.repair_coverage()
-	new /obj/effect/temp_visual/thunderstrike_actual(center)
-	var/mob/living/carbon/human/target = locate() in center.contents
-	if(!target)
-		return
-	if(target == user)
-		to_chat(user, span_notice("ALL THINGS MAY BE REPAIRED, BUT NOT YOUR OWN BODY. FOOL."))
-		return
-	if(target.stat == DEAD)
-		var/obj/item/necro_relics/necro_crystal/crystal = locate() in center
-		if(!crystal)
-			to_chat(user, span_warning("THE DEAD REQUIRE A DARK CRYSTAL."))
-			return
-		qdel(crystal)
-		ADD_TRAIT(target, TRAIT_ROTMAN, TRAIT_GENERIC)
-		to_chat(user, span_notice("[target] convulses!"))
-	else
-		to_chat(user, span_notice("[target] is made whole!"))
-	target.revive(full_heal = TRUE, admin_revive = TRUE)
-	target.emote("scream")
+/datum/ritual/toil/summonysis/invoke(mob/living/user, turf/center)
+	var/datum/effect_system/spark_spread/S = new(center)
+	S.set_up(1, 1, center)
+	S.start()
+	new /obj/structure/ysis(center)
+	to_chat(user, span_notice("Erectin' a Ysis."))
 
-/datum/ritual/toil/cultoffer
-	name = "Curse of Whispers"
-	desc = "Perform a rite that offers your target a chance to remotely join the cult, without having to drag them to a conversion sigil. Works on anyone, even if they aren't a sacrifice target. Requires a leech that fed from your target."
+/obj/structure/ysis
+	name = "Ysis"
+	desc = "It feels good to touch!"
+	icon = 'icons/obj/clockwork_objects.dmi'
+	icon_state = "hierophant_ansible"
+	density = TRUE
+	anchored = TRUE
+	max_integrity = 200
+
+/obj/structure/ysis/attack_hand(mob/living/user)
+	. = ..()
+	if(.)
+		return
+	if(!ishuman(user) || user.stat == DEAD)
+		return
+	var/mob/living/carbon/human/H = user
+	to_chat(H, span_notice("THE YSIS WORKS UPON ME..."))
+	if(!do_after(H, 5 SECONDS, target = src))
+		return
+	var/datum/status_effect/buff/healing/heal = H.apply_status_effect(/datum/status_effect/buff/healing, 10, TRUE)
+	if(heal)
+		heal.duration = world.time + 5 SECONDS
+	for(var/obj/item/I in H.get_equipped_items())
+		I.obj_integrity = min(I.obj_integrity + (I.max_integrity * 0.2), I.max_integrity)
+	to_chat(H, span_notice("YSIS MENDS ME."))
+	playsound(src, 'sound/magic/lightning.ogg', 60, TRUE)
+
+/datum/ritual/toil/fulmenor
+	name = "Curse of Fulmenor"
+	desc = "Transform the target into a horrific, yet extremely strong and regenerative monster. It attacks people at random. Lasts one minute. Requires a leech that fed from your target."
 	center_requirement = /obj/item/natural/worms/leech
 	keep_center = TRUE
+	research_cost = 5
 
-/datum/ritual/toil/cultoffer/invoke(mob/living/user, turf/center)
+/datum/ritual/toil/fulmenor/invoke(mob/living/user, turf/center)
 	var/obj/item/natural/worms/leech/remnant = find_remnant(user, center)
 	if(!remnant)
 		return
 	var/mob/living/carbon/human/victim = remnant.fed_from
-	if(!victim.client || is_zizo(victim))
-		to_chat(user, span_warning("THEY CANNOT BE SWAYED."))
+	if(!curse_target(victim))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
 		return
 	qdel(remnant)
-	var/datum/antagonist/zizocultist/PR = user.mind.has_antag_datum(/datum/antagonist/zizocultist)
-	var/answer = tgui_alert(victim, "SHE WHISPERS IN YOUR EAR. A RARE PRIVELAGE. SHE WANTS YOU. DO YOU ACCEPT?", "ZIZO", list("Accept", "Refuse"))
-	if(answer == "Accept" && PR)
-		PR.add_cultist(victim.mind)
-		to_chat(victim, span_notice("I SEE THE TRUTH NOW. SHE NEEDS ME."))
-		to_chat(user, span_warning("THEY ACCEPT."))
-	else
-		to_chat(user, span_warning("THEY REFUSED."))
+	victim.apply_status_effect(/datum/status_effect/fulmenor)
+	victim.emote("scream")
+	to_chat(victim, span_userdanger("WHAT A HORRIBLE NITE TO HAVE A CURSE."))
+	to_chat(user, span_notice("THEY SHALL WRECK HAVOC."))
+
+/datum/status_effect/fulmenor
+	id = "fulmenor"
+	duration = 1 MINUTES
+	tick_interval = 5 SECONDS
+	alert_type = null
+
+/datum/status_effect/fulmenor/on_apply()
+	. = ..()
+	var/mob/living/carbon/human/H = owner
+	H.change_stat(STATKEY_STR, 6)
+	H.change_stat(STATKEY_CON, 6)
+	ADD_TRAIT(H, TRAIT_MONSTROUS, TRAIT_GENERIC)
+	H.enter_frenzymod()
+	to_chat(H, span_notice("I WANT TO HURT PEOPLE!"))
+	return TRUE
+
+/datum/status_effect/fulmenor/tick()
+	var/mob/living/carbon/human/H = owner
+	H.heal_overall_damage(10, 10)
+
+/datum/status_effect/fulmenor/on_remove()
+	. = ..()
+	var/mob/living/carbon/human/H = owner
+	H.exit_frenzymod()
+	H.change_stat(STATKEY_STR, -6)
+	H.change_stat(STATKEY_CON, -6)
+	REMOVE_TRAIT(H, TRAIT_MONSTROUS, TRAIT_GENERIC)
+	to_chat(H, span_notice("THE MONSTROUS HUNGER FADES FROM ME."))
 
 // BITE
 
@@ -748,12 +1080,13 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/raise_undead_formation/necromancer)
 	return
 
-/datum/ritual/bite/raisedeadite
-	name = "Raise Deadite"
-	desc = "Perform a rite that raises a corpse into a pale deadite. It can use tools, but is a pacifist. You are able to see through its eyes and remotely detonate it for massive collateral damage."
+/datum/ritual/bite/resurrection
+	name = "Resurrection"
+	desc = "Place the target on the middle sigil to revive them. Requires a dark crystal on the north sigil, or else they come back as a Greater Deadite. Greater deadites are intelligent and capable of using items and weaponry, but suffer all the other drawbacks of being a deadite. They are not guaranteed to be loyal."
 	center_requirement = /mob/living/carbon/human
+	research_cost = 5
 
-/datum/ritual/bite/raisedeadite/invoke(mob/living/user, turf/center)
+/datum/ritual/bite/resurrection/invoke(mob/living/user, turf/center)
 	var/mob/living/carbon/human/corpse = locate() in center.contents
 	if(!corpse || corpse.stat != DEAD || !corpse.mind)
 		to_chat(user, span_warning("YOU NEED A CORPSE."))
@@ -762,6 +1095,13 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 		to_chat(user, span_warning("THEY SHALL NOT RISE."))
 		return
 	playsound(get_turf(corpse), 'sound/magic/magnet.ogg', 80, TRUE)
+	var/obj/item/necro_relics/necro_crystal/crystal = locate() in get_step(center, NORTH)
+	if(crystal)
+		qdel(crystal)
+		corpse.revive(full_heal = TRUE, admin_revive = TRUE)
+		ADD_TRAIT(corpse, TRAIT_ROTMAN, TRAIT_GENERIC)
+		corpse.visible_message(span_notice("[corpse] is returned to lyfe!"))
+		return
 	corpse.set_blood_volume(BLOOD_VOLUME_NORMAL)
 	corpse.setOxyLoss(0, updating_health = FALSE, forced = TRUE)
 	corpse.setToxLoss(0, updating_health = FALSE, forced = TRUE)
@@ -772,83 +1112,50 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	var/datum/antagonist/zombie/Z = corpse.mind.has_antag_datum(/datum/antagonist/zombie)
 	if(Z)
 		Z.wake_zombie(TRUE)
-	ADD_TRAIT(corpse, TRAIT_ROTMAN, TRAIT_GENERIC)
-	ADD_TRAIT(corpse, TRAIT_PACIFISM, TRAIT_GENERIC)
 	REMOVE_TRAIT(corpse, TRAIT_CHUNKYFINGERS, "/datum/antagonist/zombie")
-	if(!corpse.dna)
-		return
-	corpse.dna.species.species_traits |= MUTCOLORS
-	corpse.dna.species.fixed_mut_color = "e0eaf5"
-	corpse.dna.features["mcolor"] = "e0eaf5"
-	corpse.update_body()
-	corpse.update_hair()
-	for(var/obj/item/bodypart/BP in corpse.bodyparts)
-		for(var/datum/bodypart_feature/F in BP.bodypart_features)
-			if(F.accessory_type)
-				F.accessory_colors = recolor_accessory(F.accessory_type, "e0eaf5")
-		BP.invalidate_limb_cache()
-	for(var/obj/item/organ/O in corpse.internal_organs)
-		if(O.accessory_type)
-			O.accessory_colors = recolor_accessory(O.accessory_type, "e0eaf5")
-	corpse.icon_render_key = null
-	corpse.update_body_parts()
-	if(ishuman(user))
-		var/mob/living/carbon/human/master = user
-		if(!LAZYLEN(master.deadites_controlled))
-			master.mind?.AddSpell(new /obj/effect/proc_holder/spell/self/deadite_sight)
-			master.mind?.AddSpell(new /obj/effect/proc_holder/spell/self/deadite_burst)
-		LAZYADD(master.deadites_controlled, corpse)
+	REMOVE_TRAIT(corpse, TRAIT_ZOMBIE_SPEECH, "/datum/antagonist/zombie")
 	corpse.emote("scream")
-	to_chat(corpse, span_userdanger("IT IS TOO COLD TO REST. I RISE AGAIN TO SERVE.<br>[user.real_name] is my master, and I must obey their commands."))
+	to_chat(corpse, span_userdanger("I FEEL MORE COMPETENT THAN THE AVERAGE DEADITE."))
 
-/obj/effect/proc_holder/spell/self/deadite_sight
-	name = "Deadite Scry"
-	desc = "See through your deadite's eyes."
-	overlay_state = "gravemark"
-	recharge_time = 5 SECONDS
-	chargedloop = null
+/datum/ritual/bite/thanatophobia
+	name = "Curse of Thanatophobia"
+	desc = "The target becomes extremely afraid of skeletons and corpses. Lasts 10 minutes. Requires a leech that fed from your target."
+	center_requirement = /obj/item/natural/worms/leech
+	keep_center = TRUE
+	research_cost = 5
 
-/obj/effect/proc_holder/spell/self/deadite_sight/cast(list/targets, mob/user = usr)
-	. = ..()
-	if(!ishuman(user))
-		revert_cast()
-		return FALSE
-	var/mob/living/carbon/human/H = user
-	var/mob/living/target = pick_deadite(H, "WHOM?")
-	if(!target)
-		revert_cast()
-		return FALSE
-	var/mob/dead/observer/screye/S = H.scry_ghost()
-	if(!S)
-		revert_cast()
-		return FALSE
-	S.ManualFollow(target)
-	H.visible_message(span_danger("[H]'s eyes roll back into [H.p_their()] head."))
-	addtimer(CALLBACK(S, TYPE_PROC_REF(/mob/dead/observer, reenter_corpse)), 15 SECONDS)
-	return TRUE
+/datum/ritual/bite/thanatophobia/invoke(mob/living/user, turf/center)
+	var/obj/item/natural/worms/leech/remnant = find_remnant(user, center)
+	if(!remnant)
+		return
+	if(!curse_target(remnant.fed_from))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
+	remnant.fed_from.apply_status_effect(/datum/status_effect/debuff/thanatophobia)
+	to_chat(remnant.fed_from, span_danger("WHAT A HORRIBLE NITE TO HAVE A CURSE."))
+	remnant.fed_from.emote("scream")
+	qdel(remnant)
+	to_chat(user, span_notice("THEY SHALL FEAR MY DOMAIN!"))
 
-/obj/effect/proc_holder/spell/self/deadite_burst
-	name = "Deadite Burst"
-	desc = "Remotely detonate a deadite to cause significant damage to everyone around it. Kills the deadite."
-	overlay_state = "gravemark"
-	recharge_time = 30 SECONDS
-	chargedloop = null
+/datum/status_effect/debuff/thanatophobia
+	id = "thanatophobia"
+	duration = 10 MINUTES
+	tick_interval = 10 SECONDS
+	alert_type = null
 
-/obj/effect/proc_holder/spell/self/deadite_burst/cast(list/targets, mob/user = usr)
-	. = ..()
-	if(!ishuman(user))
-		revert_cast()
-		return FALSE
-	var/mob/living/carbon/human/H = user
-	var/mob/living/target = pick_deadite(H, "WHOM?")
-	if(!target)
-		revert_cast()
-		return FALSE
-	explosion(get_turf(target), 0, 2, 3, 4, flame_range = 3)
-	if(target.stat != DEAD)
-		target.death()
-	H.deadites_controlled -= target
-	return TRUE
+/datum/status_effect/debuff/thanatophobia/tick()
+	var/mob/living/carbon/human/H = owner
+	if(!ishuman(H))
+		return
+	for(var/mob/living/L in view(5, H))
+		if(L == H)
+			continue
+		if(L.stat == DEAD || L.mind?.has_antag_datum(/datum/antagonist/skeleton))
+			to_chat(H, span_userdanger("I MUST NOT DIE! I CAN NOT BEAR TO SEE THE DEAD!"))
+			H.emote("scream")
+			H.adjustStaminaLoss(10)
+			step_away(H, L, 10)
+			break
 
 // ROT
 
@@ -895,8 +1202,21 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	if(!ishuman(AM) || is_zizo(AM))
 		return
 	var/mob/living/carbon/human/H = AM
+	H.apply_status_effect(/datum/status_effect/debuff/rotground)
+
+/datum/status_effect/debuff/rotground
+	id = "rotground"
+	duration = -1
+	tick_interval = 3 SECONDS
+	alert_type = null
+
+/datum/status_effect/debuff/rotground/tick()
+	var/mob/living/carbon/human/H = owner
+	if(!ishuman(H) || is_zizo(H) || !istype(get_turf(H), /turf/open/floor/rogue/naturalstone/rot))
+		qdel(src)
+		return
 	H.adjustToxLoss(5)
-	H.adjustFireLoss(3)
+	H.adjustStaminaLoss(10)
 
 /obj/structure/blight_pillar
 	name = "rotting pillar"
@@ -952,6 +1272,9 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	var/obj/item/natural/worms/leech/remnant = find_remnant(user, center)
 	if(!remnant)
 		return
+	if(!curse_target(remnant.fed_from))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
 	remnant.fed_from.apply_status_effect(/datum/status_effect/black_rot)
 	to_chat(remnant.fed_from, span_danger("WHAT A HORRIBLE NITE TO HAVE A CURSE."))
 	remnant.fed_from.emote("scream")
@@ -960,53 +1283,120 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 // NOISE
 
-/obj/effect/dummy/phased_mob/slaughter/noise
-	var/nextmove = 0
-
-/obj/effect/dummy/phased_mob/slaughter/noise/relaymove(mob/user, direction)
-	if(world.time < nextmove)
-		return
-	nextmove = world.time + 4
-	forceMove(get_step(src, direction))
-
 /mob/living/proc/end_jaunt(obj/effect/dummy/phased_mob/slaughter/holder, turf/return_turf)
 	if(QDELETED(holder))
 		return
 	forceMove(return_turf || get_turf(holder))
 	qdel(holder)
 
+/mob/living/simple_animal/spook_spirit
+	name = "???"
+	desc = "Don't look at this."
+	icon = 'icons/effects/effects.dmi'
+	icon_state = "nothing"
+	invisibility = INVISIBILITY_OBSERVER
+	density = FALSE
+	incorporeal_move = TRUE
+	health = 500
+	maxHealth = 500
+	AIStatus = AI_OFF
+	can_have_ai = FALSE
+
+/mob/living/simple_animal/spook_spirit/ex_act()
+	return
+
+/mob/living/simple_animal/spook_spirit/bullet_act()
+	return BULLET_ACT_FORCE_PIERCE
+
+/mob/living/simple_animal/spook_spirit/fire_act()
+	return
+
 /datum/ritual/noise/thermalvis
-	name = "True Sight"
-	desc = "Obtain the ability to see the living through walls."
+	name = "Spook"
+	desc = "Learn a spell to phase-walk through walls, leaving your body behind. Your eyes now see the living through walls."
 	passive = TRUE
 	research_cost = 3
 
 /datum/ritual/noise/thermalvis/apply_passive(mob/living/carbon/human/H)
 	ADD_TRAIT(H, TRAIT_THERMAL_VISION, TRAIT_GENERIC)
+	H.mind.AddSpell(new /obj/effect/proc_holder/spell/self/spook_scry)
 	return
 
-/datum/ritual/noise/ghost_form
+/obj/effect/proc_holder/spell/self/spook_scry
 	name = "Spook"
-	desc = "Perform a rite that transforms you into an incorporeal observer for 20 seconds. You can move through walls and listen into conversations."
-	center_requirement = /mob/living/carbon/human
+	desc = "Leave your body behind and observe the world unhindered for 20 seconds."
+	overlay_icon = 'icons/mob/actions/zizomiracles.dmi'
+	action_icon = 'icons/mob/actions/zizomiracles.dmi'
+	overlay_state = "zizocloud"
+	recharge_time = 30 SECONDS
+	chargedloop = null
 
-/datum/ritual/noise/ghost_form/invoke(mob/living/user, turf/center)
+/obj/effect/proc_holder/spell/self/spook_scry/charge_check(mob/user)
+	return charge_counter >= recharge_time
+
+/obj/effect/proc_holder/spell/self/spook_scry/cast(list/targets, mob/user = usr)
 	. = ..()
-	var/mob/living/carbon/human/target = locate() in center.contents
-	if(!target)
-		to_chat(user, span_warning("NOT FOR THEM."))
-		return
-	var/poo = new /obj/effect/temp_visual/opengate/fivesec(center)
-	playsound(user, 'sound/villain/littlescary2.ogg', 60, TRUE)
-	if(!do_after(user, 5 SECONDS))
-		qdel(poo)
-		return
-	var/turf/origin = get_turf(target)
-	var/obj/effect/dummy/phased_mob/slaughter/noise/holder = new(origin)
-	target.visible_message(span_warning("[target] fades into nothing."))
-	target.forceMove(holder)
-	addtimer(CALLBACK(target, TYPE_PROC_REF(/mob/living, end_jaunt), holder, origin), 20 SECONDS)
+	if(!ishuman(user))
+		revert_cast()
+		return FALSE
+	var/mob/living/carbon/human/H = user
+	if(!H.mind)
+		revert_cast()
+		return FALSE
+	var/mob/living/simple_animal/spook_spirit/spirit = new(get_turf(H))
+	H.visible_message(span_warning("[H] falls limp!"))
+	H.mind.transfer_to(spirit)
+	addtimer(CALLBACK(src, PROC_REF(end_spook), H, spirit), 20 SECONDS)
 	return TRUE
+
+/obj/effect/proc_holder/spell/self/spook_scry/proc/end_spook(mob/living/carbon/human/H, mob/living/simple_animal/spook_spirit/spirit)
+	if(QDELETED(H))
+		qdel(spirit)
+		return
+	if(spirit.mind)
+		spirit.mind.transfer_to(H)
+	qdel(spirit)
+
+/obj/effect/proc_holder/spell/self/witch_possess
+	name = "Witchery"
+	desc = "Possess cat, or return to body."
+	overlay_icon = 'icons/mob/actions/zizomiracles.dmi'
+	action_icon = 'icons/mob/actions/zizomiracles.dmi'
+	overlay_state = "tame_deadite"
+	recharge_time = 10 SECONDS
+	chargedloop = null
+	var/mob/living/simple_animal/pet/cat/rogue/black/cat
+	var/mob/living/carbon/human/body
+
+/obj/effect/proc_holder/spell/self/witch_possess/cast(list/targets, mob/user = usr)
+	. = ..()
+	if(user == cat)
+		if(body && cat.mind)
+			cat.mind.transfer_to(body)
+		return TRUE
+	if(!ishuman(user))
+		revert_cast()
+		return FALSE
+	if(!cat || QDELETED(cat))
+		cat = new(get_turf(user))
+	if(cat.mind)
+		to_chat(user, span_warning("NOT WORKING."))
+		revert_cast()
+		return FALSE
+	var/mob/living/carbon/human/H = user
+	body = H
+	H.mind.transfer_to(cat)
+	return TRUE
+
+/datum/ritual/noise/witchery
+	name = "Witchery"
+	desc = "Summon a black cat. You are able to remotely possess it at any time and see through its eyes."
+	passive = TRUE
+	research_cost = 3
+
+/datum/ritual/noise/witchery/apply_passive(mob/living/carbon/human/H)
+	H.mind.AddSpell(new /obj/effect/proc_holder/spell/self/witch_possess)
+	return
 
 /datum/ritual/noise/forgettongue
 	name = "Curse of Babel"
@@ -1017,6 +1407,9 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 /datum/ritual/noise/forgettongue/invoke(mob/living/user, turf/center)
 	var/obj/item/natural/worms/leech/remnant = find_remnant(user, center)
 	if(!remnant)
+		return
+	if(!curse_target(remnant.fed_from))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
 		return
 	remnant.fed_from.remove_language(/datum/language/common, source = LANGUAGE_SOURCE_ALL)
 	remnant.fed_from.adjust_skillrank(/datum/skill/misc/reading, -6, TRUE)
@@ -1205,6 +1598,9 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	var/obj/item/natural/worms/leech/remnant = find_remnant(user, center)
 	if(!remnant)
 		return
+	if(!curse_target(remnant.fed_from))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
 	remnant.fed_from.AddComponent(/datum/component/light_vulnerability, 10, 10 MINUTES)
 	to_chat(remnant.fed_from, span_danger("WHAT A HORRIBLE NITE TO HAVE A CURSE."))
 	remnant.fed_from.emote("scream")
@@ -1231,7 +1627,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	switch(effect)
 		if("poison")
 			if(L.reagents)
-				L.reagents.add_reagent(/obj/item/reagent_containers/glass/bottle/rogue/berrypoison, 15)
+				L.reagents.add_reagent(/datum/reagent/berrypoison, 15)
 			L.emote("scream")
 			L.Jitter(4)
 			L.visible_message(span_danger("THE SIGIL SPRAYS [L] WITH FOUL BLOOD!"))
@@ -1279,9 +1675,8 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /datum/status_effect/bloodlink
 	id = "bloodlink"
-	duration = -1
-	tick_interval = 5 SECONDS
 	duration = 10 MINUTES
+	tick_interval = 5 SECONDS
 	alert_type = /atom/movable/screen/alert/status_effect/bloodlink
 	var/mob/living/carbon/human/partner
 
@@ -1330,6 +1725,11 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	if(A == B)
 		to_chat(user, span_warning("You can not bind someone to theirself. Fool!"))
 		return
+	if(A.has_status_effect(/datum/status_effect/buff/curse_immunity) || B.has_status_effect(/datum/status_effect/buff/curse_immunity))
+		to_chat(user, span_warning("THEY ARE PROTECTED FROM FURTHER CURSES."))
+		return
+	curse_target(A)
+	curse_target(B)
 	A.apply_status_effect(/datum/status_effect/bloodlink, B)
 	B.apply_status_effect(/datum/status_effect/bloodlink, A)
 	qdel(L1)
