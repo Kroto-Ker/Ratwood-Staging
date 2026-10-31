@@ -83,19 +83,18 @@
 	popup.open(FALSE)
 
 // this menu allows players 2 boost their stats to wretch tier (+12 weight) & choose between DE / Heavy Armor
-/mob/living/carbon/human/var/datum/antag_setup/antag_setup
+GLOBAL_LIST_EMPTY(antag_setups)
 
 /datum/antag_setup
 	var/mob/living/carbon/human/user
 	var/list/stats = list()
 	var/list/defaults = list()
 	var/chosen_trait
-	var/budget = 16
+	var/budget = 20
 	var/static/list/stat_keys = list(STATKEY_STR, STATKEY_PER, STATKEY_INT, STATKEY_CON, STATKEY_WIL, STATKEY_SPD)
 
 /datum/antag_setup/New(mob/living/carbon/human/H)
 	user = H
-	H.antag_setup = src
 	var/waited = 0
 	while(!H.advjob)
 		sleep(1 SECONDS)
@@ -105,7 +104,12 @@
 			return
 	for(var/key in stat_keys)
 		stats[key] = H.get_stat_level(key)
+		for(var/datum/status_effect/S in H.status_effects)
+			stats[key] -= S.effectedstats[key]
 		defaults[key] = stats[key]
+		if(H.statpack && !islist(H.statpack.stat_array[key]))
+			budget += H.statpack.stat_array[key] * statweight(key)
+	GLOB.antag_setups += src
 	open_menu()
 
 /datum/antag_setup/proc/statweight(key)
@@ -116,7 +120,7 @@
 /datum/antag_setup/proc/statspent()
 	. = 0
 	for(var/key in stat_keys)
-		. += (stats[key] - defaults[key]) * statweight(key)
+		. += (stats[key] - 10) * statweight(key)
 
 /datum/antag_setup/proc/open_menu()
 	var/contents = "Points remaining: [budget - statspent()]</center><BR>"
@@ -164,7 +168,7 @@
 			if(diff)
 				user.change_stat(key, diff)
 		ADD_TRAIT(user, chosen_trait, TRAIT_GENERIC)
-		user.antag_setup = null
+		GLOB.antag_setups -= src
 		user << browse(null, "window=antagsetup")
 		qdel(src)
 

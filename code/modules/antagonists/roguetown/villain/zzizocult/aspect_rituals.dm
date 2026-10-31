@@ -969,7 +969,6 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	bigboy = TRUE
 	gripsprite = TRUE
 	walking_stick = TRUE
-	special = /datum/special_intent/deploy_turret
 	var/list/obj/structure/toilturret/turrets = list()
 	var/max_turrets = 3
 
@@ -981,6 +980,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	. = ..()
 	if(slot != ITEM_SLOT_HANDS || !user.mind)
 		return
+	user.mind.AddSpell(new /obj/effect/proc_holder/spell/self/deploy_turret)
 	user.mind.AddSpell(new /obj/effect/proc_holder/spell/self/direct_turrets)
 	user.mind.AddSpell(new /obj/effect/proc_holder/spell/self/scrap_turrets)
 
@@ -988,6 +988,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	. = ..()
 	if(!user.mind)
 		return
+	user.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/deploy_turret)
 	user.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/direct_turrets)
 	user.mind.RemoveSpell(/obj/effect/proc_holder/spell/self/scrap_turrets)
 
@@ -1042,34 +1043,37 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	to_chat(user, span_notice("My sentries have disassembled."))
 	return TRUE
 
-/datum/special_intent/deploy_turret
+/obj/effect/proc_holder/spell/self/deploy_turret
 	name = "Deploy Turret"
 	desc = "Buildin' a Sentry."
-	tile_coordinates = list(list(0,0))
-	post_icon_state = "strike"
-	pre_icon_state = "trap"
-	delay = 4 SECONDS
-	cooldown = 20 SECONDS
-	stamcost = 20
-	use_doafter = TRUE
+	recharge_time = 20 SECONDS
+	chargedloop = null
 
-/datum/special_intent/deploy_turret/apply_hit(turf/T)
-	..()
-	var/obj/item/rogueweapon/mace/maul/toil/W = iparent
+/obj/effect/proc_holder/spell/self/deploy_turret/cast(list/targets, mob/living/user = usr)
+	. = ..()
+	var/obj/item/rogueweapon/mace/maul/toil/W = user.get_active_held_item()
 	if(!istype(W))
-		return
+		to_chat(user, span_warning("I must hold the Tool."))
+		revert_cast()
+		return FALSE
 	for(var/obj/structure/toilturret/existing as anything in W.turrets.Copy())
 		if(QDELETED(existing))
 			W.turrets -= existing
 	if(length(W.turrets) >= W.max_turrets)
-		to_chat(howner, span_warning("I can only have [W.max_turrets] sentries!."))
-		return
-	if(T.density)
-		to_chat(howner, span_warning("There's no room for a sentry there."))
-		return
-	var/obj/structure/toilturret/turret = new(T, howner, W)
-	W.turrets += turret
-	to_chat(howner, span_notice("The turret whirs to life!"))
+		to_chat(user, span_warning("Too many sentries!"))
+		revert_cast()
+		return FALSE
+	var/turf/T = get_step(user, user.dir)
+	if(!T || T.density)
+		to_chat(user, span_warning("No room!"))
+		revert_cast()
+		return FALSE
+	if(!do_after(user, 4 SECONDS, target = T))
+		revert_cast()
+		return FALSE
+	W.turrets += new /obj/structure/toilturret(T, user, W)
+	to_chat(user, span_notice("The turret whirs to life!"))
+	return TRUE
 
 /obj/structure/toilturret
 	name = "cog turret"
