@@ -267,6 +267,9 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 	var/mob/living/carbon/human/target = locate() in center.contents
 	if(zizo_target_error(user, target))
 		return
+	if(target.has_status_effect(/datum/status_effect/debuff/devitalised/lux_ripped))
+		to_chat(user, span_warning("THEIR LUX IS TOO WEAK."))
+		return
 	var/datum/antagonist/zizocultist/PR = user.mind.has_antag_datum(/datum/antagonist/zizocultist, TRUE)
 	var/lackeys = 0
 	for(var/datum/mind/M in SSmapping.retainer.cultists)
