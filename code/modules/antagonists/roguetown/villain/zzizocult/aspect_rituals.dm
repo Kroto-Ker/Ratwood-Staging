@@ -706,6 +706,12 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	to_chat(H, span_danger("[uppertext(weapon)] HATES ME!"))
 	H.dropItemToGround(weapon)
 
+/obj/item/rogueweapon/huntingknife/idagger/steel/kris/zizo/conjured
+	associated_skill = /datum/skill/combat/arcyne
+
+/obj/item/rogueweapon/sword/long/zizo/conjured
+	associated_skill = /datum/skill/combat/arcyne
+
 /datum/action/cooldown/spell/form_blade/avantyne
 	name = "Avantyne Blade"
 	desc = "Conjure an avantyne dagger or sword. Cycle the form with Shift+G. Cast again to dispel it."
@@ -722,8 +728,8 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	ignore_armor_penalty = TRUE
 	spell_requirements = SPELL_REQUIRES_HUMAN
 	forms = list(
-		list("label" = "Dagger", "weapon" = /obj/item/rogueweapon/huntingknife/idagger/steel/kris/zizo),
-		list("label" = "Sword", "weapon" = /obj/item/rogueweapon/sword/long/zizo),
+		list("label" = "Dagger", "weapon" = /obj/item/rogueweapon/huntingknife/idagger/steel/kris/zizo/conjured),
+		list("label" = "Sword", "weapon" = /obj/item/rogueweapon/sword/long/zizo/conjured),
 	)
 
 /datum/action/cooldown/spell/form_blade/avantyne/cast(atom/cast_on)
@@ -786,6 +792,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	icon_state = "hagsword"
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	max_blade_int = 9999
 	force = 25
 	force_wielded = 35
@@ -795,7 +802,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /obj/item/rogueweapon/sword/long/noise/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/swords)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /obj/item/rogueweapon/sword/long/noise/attack(mob/living/M, mob/living/user)
 	update_force_dynamic()
@@ -839,13 +846,14 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	force = 25
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	max_blade_int = 9999
 	smeltresult = null
 	possible_item_intents =	list(/datum/intent/dagger/thrust/cult,/datum/intent/dagger/cut/cult)
 
 /obj/item/rogueweapon/huntingknife/idagger/steel/blood/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/knives)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /obj/item/rogueweapon/huntingknife/idagger/steel/pitch
 	name = "astrata-touched dagger"
@@ -855,13 +863,14 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	force = 20
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	max_blade_int = 9999
 	smeltresult = null
 	special = /datum/special_intent/ignite_dagger
 
 /obj/item/rogueweapon/huntingknife/idagger/steel/pitch/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/knives)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /datum/special_intent/ignite_dagger
 	name = "Ignite Dagger"
@@ -900,6 +909,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	force = 30
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	max_blade_int = 9999
 	var/active_intents =	list(/datum/intent/sword/cut/sabre/cult, /datum/intent/sword/thrust/sabre/cult)
 	var/inactive_intents = list()
@@ -910,7 +920,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /obj/item/rogueweapon/sword/sabre/rot/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/swords)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /datum/special_intent/coat_blade
 	name = "Coat Blade"
@@ -950,10 +960,12 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	icon_state = "bronzewrench"
 	icon = 'icons/roguetown/weapons/blunt64.dmi'
 	force = 25
-	force_wielded = 35
+	force_wielded = 40
+	wdefense_wbonus = 5
 	minstr = 8
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	w_class = WEIGHT_CLASS_BULKY
 	smeltresult = null
 	swingsound = BLUNTWOOSH_LARGE
@@ -974,7 +986,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /obj/item/rogueweapon/mace/maul/toil/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/maces)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /obj/item/rogueweapon/mace/maul/toil/equipped(mob/user, slot, initial)
 	. = ..()
@@ -1191,6 +1203,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	minstr = 8
 	max_integrity = 9999
 	resistance_flags = INDESTRUCTIBLE
+	associated_skill = /datum/skill/combat/arcyne
 	max_blade_int = 9999
 	anvilrepair = /datum/skill/craft/carpentry
 	smeltresult = null
@@ -1202,7 +1215,7 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /obj/item/rogueweapon/spear/bite/Initialize(mapload)
 	. = ..()
-	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/polearms)
+	AddComponent(/datum/component/soulbound_weapon, /datum/skill/combat/arcyne)
 
 /datum/special_intent/scythe_cone
 	name = "Snow Stance"

@@ -1735,6 +1735,7 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 
 /datum/ritual/transmutation/summonweapon/apply_passive(mob/living/carbon/human/H)
 	H.mind.AddSpell(new /datum/action/cooldown/spell/form_blade/avantyne)
+	H.adjust_skillrank_up_to(/datum/skill/combat/arcyne, SKILL_LEVEL_EXPERT)
 	return
 
 // FLESH CRAFTING
