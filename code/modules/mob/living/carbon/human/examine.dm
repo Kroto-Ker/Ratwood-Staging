@@ -420,8 +420,8 @@
 			str = "[m3] something on [m2] wrists!"
 		. += str
 
-	if(istype(skin_armor, /obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward))
-		var/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/ward = skin_armor
+	var/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/ward = skin_armor
+	if(istype(ward) && !ward.hidden)
 		var/str = "[m3] <font color='[ward.ward_color]'>[ward.generate_tooltip(ward.get_examine_string(user))] shimmering around [user == src ? "me" : p_them()].</font>"
 		str += ward.integrity_check(is_smart)
 		if (is_stupid)

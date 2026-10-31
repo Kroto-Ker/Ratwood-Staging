@@ -1738,6 +1738,17 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 	H.adjust_skillrank_up_to(/datum/skill/combat/arcyne, SKILL_LEVEL_EXPERT)
 	return
 
+/datum/ritual/transmutation/hiddenward
+	lesser = TRUE
+	name = "Inhumen Ward"
+	desc = "Learn a spell to conjure a strong, invisible ward. Consumes a dark crystal to learn."
+	passive = TRUE
+	research_item = /obj/item/necro_relics/necro_crystal
+	research_cost = 3
+
+/datum/ritual/transmutation/hiddenward/apply_passive(mob/living/carbon/human/H)
+	H.mind.AddSpell(new /datum/action/cooldown/spell/conjure_arcyne_ward/zizo)
+
 // FLESH CRAFTING
 /datum/ritual/fleshcrafting
 	abstract_type = /datum/ritual/fleshcrafting

@@ -17,7 +17,7 @@ GLOBAL_LIST_INIT(zizo_researchable, list(
 	/datum/ritual/fleshcrafting/bunnylegs, /datum/ritual/fleshcrafting/fleshmend,
 	/datum/ritual/fleshcrafting/fleshmend/greater, /datum/ritual/fleshcrafting/darkeyes,
 	/datum/ritual/fleshcrafting/nopain, /datum/ritual/fleshcrafting/immortality,
-	/datum/ritual/transmutation/summonarmor, /datum/ritual/transmutation/summonweapon,
+	/datum/ritual/transmutation/summonarmor, /datum/ritual/transmutation/summonweapon, /datum/ritual/transmutation/hiddenward,
 	/datum/ritual/transmutation/summonpylon, /datum/ritual/transmutation/summonraver,
 	/datum/ritual/transmutation/propaganda, /datum/ritual/servantry/sleepcurse,
 	/datum/ritual/transmutation/silencerleech, /datum/ritual/servantry/darksunmark,
@@ -711,6 +711,52 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 
 /obj/item/rogueweapon/sword/long/zizo/conjured
 	associated_skill = /datum/skill/combat/arcyne
+
+/datum/action/cooldown/spell/conjure_arcyne_ward/zizo
+	name = "Inhumen Ward"
+	desc = "Conjure an inhumen ward - an upgraded arcyne ward hardened with dark magic. \
+	This ward is entirely invisible until damaged, unlike other wards. 400 integrity. \
+	Otherwise functions as a standard arcyne ward - yields coverage to real armor, does not regenerate. \
+	Cast again to dismiss. Cooldown begins when dismissed or destroyed."
+	button_icon = 'icons/mob/actions/zizomiracles.dmi'
+	button_icon_state = "ZIZO"
+	source_aspect = null
+	invocation_type = INVOCATION_NONE
+	dismiss_invocation = ""
+	regen_invocation = ""
+	ward_type = /obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/zizo
+
+/datum/action/cooldown/spell/conjure_arcyne_ward/zizo/before_cast(atom/cast_on)
+	var/mob/living/carbon/human/H = owner
+	if((!conjured_ward || QDELETED(conjured_ward)) && H.skin_armor)
+		to_chat(H, span_warning("Already warded!"))
+		return SPELL_CANCEL_CAST
+	return ..()
+
+/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/zizo
+	name = "inhumen ward"
+	desc = "An arcyne ward hardened with dark magic."
+	arcyne_armor_tier = ARCYNE_WARD_TIER_GREATER + 1
+	armor = ARMOR_BRIGANDINE
+	max_integrity = 400
+	hidden = TRUE
+	ward_color = "#7a1fa2"
+
+/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/zizo/flash_ward()
+	if(!ward_owner)
+		return
+	hidden = FALSE
+	ward_owner.remove_filter("zizo_ward_glow")
+	ward_owner.add_filter("zizo_ward_glow", 2, list("type" = "outline", "color" = ward_color, "alpha" = 80, "size" = 1))
+	addtimer(CALLBACK(src, PROC_REF(clear_flash)), 30 SECONDS, TIMER_UNIQUE | TIMER_OVERRIDE)
+
+/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/zizo/clear_flash()
+	hidden = TRUE
+	ward_owner?.remove_filter("zizo_ward_glow")
+
+/obj/item/clothing/suit/roguetown/armor/manual/arcyne_ward/zizo/cleanup_ward()
+	ward_owner?.remove_filter("zizo_ward_glow")
+	return ..()
 
 /datum/action/cooldown/spell/form_blade/avantyne
 	name = "Avantyne Blade"
