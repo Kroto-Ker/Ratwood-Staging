@@ -17,7 +17,7 @@ GLOBAL_LIST_INIT(zizo_researchable, list(
 	/datum/ritual/fleshcrafting/bunnylegs, /datum/ritual/fleshcrafting/fleshmend,
 	/datum/ritual/fleshcrafting/fleshmend/greater, /datum/ritual/fleshcrafting/darkeyes,
 	/datum/ritual/fleshcrafting/nopain, /datum/ritual/fleshcrafting/immortality,
-	/datum/ritual/transmutation/summonarmor, /datum/ritual/transmutation/summonweapon, /datum/ritual/transmutation/hiddenward,
+	/datum/ritual/transmutation/summonarmor, /datum/ritual/transmutation/summonweapon, /datum/ritual/transmutation/hiddenward, /datum/ritual/transmutation/lessernecromancy,
 	/datum/ritual/transmutation/summonpylon, /datum/ritual/transmutation/summonraver,
 	/datum/ritual/transmutation/propaganda, /datum/ritual/servantry/sleepcurse,
 	/datum/ritual/transmutation/silencerleech, /datum/ritual/servantry/darksunmark,
@@ -1622,13 +1622,12 @@ GLOBAL_LIST_EMPTY(zizo_bestow_areas)
 	name = "Necromancy"
 	desc = "Learn necromancy spells and the ability to use dark crystals to summon sentient skeletons."
 	passive = TRUE
+	spells = list(/obj/effect/proc_holder/spell/invoked/gravemark, /obj/effect/proc_holder/spell/invoked/command_undead, /obj/effect/proc_holder/spell/invoked/raise_undead_formation/necromancer, /datum/action/cooldown/spell/bonechill, /datum/action/cooldown/spell/bonemend)
 
 /datum/ritual/bite/necromancy/apply_passive(mob/living/carbon/human/H)
-	H.mind.current.faction += "[H.name]_faction"
-	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/gravemark)
-	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/command_undead)
-	H.mind.AddSpell(new /obj/effect/proc_holder/spell/invoked/raise_undead_formation/necromancer)
-	return
+	H.mind.current.faction |= "[H.name]_faction"
+	H.adjust_skillrank_up_to(/datum/skill/magic/arcane, SKILL_LEVEL_EXPERT)
+	H.mind.RemoveSpell(/obj/effect/proc_holder/spell/invoked/raise_undead_formation/lesser)
 
 /datum/ritual/bite/resurrection
 	name = "Resurrection"

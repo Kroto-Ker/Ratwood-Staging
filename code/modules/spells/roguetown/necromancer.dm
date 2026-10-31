@@ -268,6 +268,14 @@
 	playsound(user, "shatter", 50, TRUE)
 	return TRUE
 
+/obj/effect/proc_holder/spell/invoked/raise_undead_formation/lesser
+	name = "Raise Lesser Undead"
+	desc = "Raises a simple minded undead skeleton. Inferior shamblers. Husks in everything but zeal."
+	cabal_affine = TRUE
+	is_summoned = TRUE
+	recharge_time = 15 SECONDS
+	to_spawn = 1
+
 /obj/effect/proc_holder/spell/invoked/tame_undead
 	name = "Tame Deadite"
 	desc = "Oftentymes, husks and shamblers walk aimlessly - uncertain of their future. Befriends the undead \

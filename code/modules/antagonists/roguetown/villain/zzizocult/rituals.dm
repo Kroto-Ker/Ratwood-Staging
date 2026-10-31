@@ -170,6 +170,9 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 		qdel(held)
 	user.mind.zizo_points -= initial(R.research_cost)
 	user.mind.zizo_researched |= ritualtype
+	for(var/spell in R.spells)
+		if(!user.mind.has_spell(spell))
+			user.mind.AddSpell(new spell)
 	if(R.passive)
 		R.apply_passive(user)
 	to_chat(user, span_boldnotice("EUREKA! I DISCOVER [uppertext(R.name)]!"))
@@ -223,6 +226,7 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 	var/passive = FALSE
 	var/lesser = FALSE
 	var/research_item
+	var/list/spells = list()
 
 /datum/ritual/proc/invoke(mob/living/user, turf/center)
 	return
@@ -1741,6 +1745,19 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 	H.adjust_skillrank_up_to(/datum/skill/combat/arcyne, SKILL_LEVEL_EXPERT)
 	return
 
+/datum/ritual/transmutation/lessernecromancy
+	lesser = TRUE
+	name = "Lesser Necromancy"
+	desc = "Become an initiate in the teachings of Necromancy. Consumes a dark crystal to learn."
+	research_item = /obj/item/necro_relics/necro_crystal
+	passive = TRUE
+	research_cost = 3
+	spells = list(/obj/effect/proc_holder/spell/invoked/gravemark, /obj/effect/proc_holder/spell/invoked/command_undead, /obj/effect/proc_holder/spell/invoked/raise_undead_formation/lesser, /datum/action/cooldown/spell/bonechill, /datum/action/cooldown/spell/bonemend)
+
+/datum/ritual/transmutation/lessernecromancy/apply_passive(mob/living/carbon/human/H)
+	H.mind.current.faction |= "[H.name]_faction"
+	H.adjust_skillrank_up_to(/datum/skill/magic/arcane, SKILL_LEVEL_APPRENTICE)
+
 /datum/ritual/transmutation/hiddenward
 	lesser = TRUE
 	name = "Inhumen Ward"
@@ -1748,9 +1765,7 @@ GLOBAL_LIST_INIT(ritualslist, build_zizo_rituals())
 	passive = TRUE
 	research_item = /obj/item/necro_relics/necro_crystal
 	research_cost = 3
-
-/datum/ritual/transmutation/hiddenward/apply_passive(mob/living/carbon/human/H)
-	H.mind.AddSpell(new /datum/action/cooldown/spell/conjure_arcyne_ward/zizo)
+	spells = list(/datum/action/cooldown/spell/conjure_arcyne_ward/zizo)
 
 // FLESH CRAFTING
 /datum/ritual/fleshcrafting
